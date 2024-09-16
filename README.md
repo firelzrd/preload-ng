@@ -10,3 +10,7 @@
 - `kernel`: Manages the core functionality of `preload-rs`. It is a library.
 
 All crates reside under `crates/` directory.
+
+## Guidelines
+
+Please see [CONTRIBUTING](./CONTRIBUTING.md).

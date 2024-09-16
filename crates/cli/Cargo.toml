@@ -16,6 +16,11 @@ anyhow = "1.0.89"
 clap = "4.5.17"
 clap-verbosity-flag = "2.2.1"
 tokio = { version = "1.40.0", features = ["macros", "rt-multi-thread"] }
+tracing-subscriber = "0.3.18"
+tracing-log = "0.2.0"
 
 [dev-dependencies]
 proptest.workspace = true
+
+[lints]
+workspace = true
