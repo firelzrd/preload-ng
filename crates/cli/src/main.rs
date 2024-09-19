@@ -1,13 +1,18 @@
 use clap::Parser;
 use config::Config;
 use flume::bounded;
-use preload_rs::{cli::Cli, signals::wait_for_signal};
+use preload_rs::{
+    cli::Cli,
+    signals::{wait_for_signal, SignalEvent},
+};
+use tokio::pin;
 use tracing::debug;
 use tracing_log::AsTrace;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
+    debug!(?cli);
     tracing_subscriber::fmt()
         .with_max_level(cli.verbosity.log_level_filter().as_trace())
         .with_level(true)
@@ -15,26 +20,34 @@ async fn main() -> anyhow::Result<()> {
         .with_line_number(true)
         .init();
 
-    debug!(config = ?cli);
-
     let config = match cli.conffile {
         Some(path) => Config::load(path)?,
         _ => Config::new(),
     };
+    debug!(?config);
 
-    let (events_tx, events_rx) = bounded(8);
+    let (signals_tx, signals_rx) = bounded(8);
+    pin! {
+       let handler = wait_for_signal(signals_tx);
+    }
 
     loop {
         tokio::select! {
-            err = wait_for_signal(&events_tx) => {
-                tracing::error!(error = ?err, "Error while waiting for signal");
-                err?;
-            }
-            //
-            res = events_rx.recv_async() => {
-                let event = res?;
+            event_res = signals_rx.recv_async() => {
+                let event = event_res?;
                 debug!(?event, "Received signal event");
+
+                match event {
+                    SignalEvent::DumpStateInfo => {
+                        // TODO: dump state info
+                    }
+                    SignalEvent::ManualSaveState => {
+                        // TODO: save state
+                    }
+                }
             }
+            // bubble up any errors from the signal handlers
+            res = &mut handler => { res? }
         }
     }
 }
