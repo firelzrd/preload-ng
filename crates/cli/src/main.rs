@@ -20,11 +20,13 @@ async fn main() -> anyhow::Result<()> {
         .with_line_number(true)
         .init();
 
-    let config = match cli.conffile {
+    let config = match &cli.conffile {
         Some(path) => Config::load(path)?,
         _ => Config::new(),
     };
     debug!(?config);
+
+    let mut state = kernel::state::State::new(config);
 
     let (signals_tx, signals_rx) = bounded(8);
     pin! {
@@ -32,6 +34,8 @@ async fn main() -> anyhow::Result<()> {
     }
 
     loop {
+        let state = &mut state;
+
         tokio::select! {
             event_res = signals_rx.recv_async() => {
                 let event = event_res?;
@@ -39,10 +43,10 @@ async fn main() -> anyhow::Result<()> {
 
                 match event {
                     SignalEvent::DumpStateInfo => {
-                        // TODO: dump state info
+                        state.dump_info();
                     }
                     SignalEvent::ManualSaveState => {
-                        // TODO: save state
+
                     }
                 }
             }

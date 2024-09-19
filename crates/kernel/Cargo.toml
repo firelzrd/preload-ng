@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+config = { version = "0.1.0", path = "../config" }
 thiserror.workspace = true
 tracing.workspace = true
 
