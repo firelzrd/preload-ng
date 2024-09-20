@@ -1,0 +1,88 @@
+name: CI
+on:
+  push:
+    branches:
+      - master
+  # nightly build
+  schedule:
+    - cron: "0 0 * * *"
+
+env:
+  # for now don't make the build fail on warnings
+  # RUSTFLAGS: "-D warnings"
+  # prevents out of disk space error
+  CARGO_INCREMENTAL: 0
+  CARGO_PROFILE_DEV_DEBUG: 0
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install mold linker
+        uses: rui314/setup-mold@v1
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Setup Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-llvm-cov and nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov,nextest
+
+      - name: Check formatting
+        run: cargo fmt --check --all
+
+      - name: Check sources
+        run: cargo check --workspace --all-features
+
+      - name: Perform linting
+        run: cargo clippy --all-targets --all-features
+
+      - name: Run doctests
+        run: cargo test --doc --all-features --workspace
+
+      - name: Run tests
+        run: cargo llvm-cov --no-report nextest --all-features --workspace
+
+      - name: Combine coverage
+        run: cargo llvm-cov report --lcov --output-path coverage.lcov
+
+      # TODO: uncomment me once we are a public repo
+      # - name: Upload Coverage Report 📤
+      #   uses: coverallsapp/github-action@v2.2.3
+      #   with:
+      #     github-token: ${{ secrets.GITHUB_TOKEN }}
+      #     file: ./coverage.lcov
+
+  nightly:
+    if: github.event.schedule == '0 0 * * *'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install mold linker
+        uses: rui314/setup-mold@v1
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Nightly build
+        run: cargo build -p preload-rs --all-features --release
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: preload-nightly
+          path: target/release/preload-rs
