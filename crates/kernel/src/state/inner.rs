@@ -30,31 +30,31 @@ pub(crate) struct StateInner {
 
     pub(crate) last_running_timestamp: u64,
 
-    last_accounting_timestamp: u64,
+    pub(crate) last_accounting_timestamp: u64,
 
-    map_seq: u64,
+    pub(crate) map_seq: u64,
 
-    maps: HashSet<Map>,
+    pub(crate) maps: HashSet<Map>,
 
-    exe_seq: u64,
+    pub(crate) exe_seq: u64,
 
-    state_changed_exes: VecDeque<Exe>,
+    pub(crate) state_changed_exes: VecDeque<Exe>,
 
-    running_exes: VecDeque<Exe>,
+    pub(crate) running_exes: VecDeque<Exe>,
 
-    new_running_exes: VecDeque<Exe>,
+    pub(crate) new_running_exes: VecDeque<Exe>,
 
-    new_exes: HashMap<PathBuf, pid_t>,
+    pub(crate) new_exes: HashMap<PathBuf, pid_t>,
 
-    exes: HashMap<PathBuf, Exe>,
+    pub(crate) exes: HashMap<PathBuf, Exe>,
     /// Exes that are too small to be considered. Value is the size of the exe maps.
-    bad_exes: HashMap<PathBuf, u64>,
+    pub(crate) bad_exes: HashMap<PathBuf, u64>,
 
-    sysinfo: System,
+    pub(crate) sysinfo: System,
 
-    system_refresh_kind: RefreshKind,
+    pub(crate) system_refresh_kind: RefreshKind,
 
-    memstat_timestamp: u64,
+    pub(crate) memstat_timestamp: u64,
 }
 
 impl StateInner {
@@ -119,7 +119,7 @@ impl StateInner {
                 size += length;
 
                 if let Some(exemaps) = &mut exemaps {
-                    let mut map = Map::new(path, map.offset, length);
+                    let mut map = Map::new(path, map.offset, length, self.time);
                     if let Some(existing_map) = self.maps.get(&map) {
                         map = existing_map.clone();
                     }
@@ -136,8 +136,8 @@ impl StateInner {
         if self.maps.contains(&map) {
             return;
         }
-        self.map_seq += 1;
         map.set_seq(self.map_seq);
+        self.map_seq += 1;
         self.maps.insert(map);
     }
 
@@ -208,10 +208,11 @@ impl StateInner {
             unreachable!("exemaps should be Some because we explicitly asked for it");
         };
 
-        let exe = Exe::new(path)
-            .with_running(self.last_running_timestamp)
-            .with_exemaps(exemaps);
+        let exe = Exe::new(path).with_running(self.last_running_timestamp);
         self.register_exe(exe.clone(), true);
+        // NOTE: we can only register the exemaps after we have been assigned an
+        // exe_seq
+        let exe = exe.try_with_exemaps(exemaps)?;
         self.running_exes.push_front(exe);
 
         Ok(())
@@ -219,8 +220,8 @@ impl StateInner {
 
     #[tracing::instrument(skip(self, exe))]
     fn register_exe(&mut self, exe: Exe, create_markovs: bool) {
-        self.exe_seq += 1;
         exe.set_seq(self.exe_seq);
+        self.exe_seq += 1;
         trace!(?exe, "registering exe");
         if create_markovs {
             self.exes.iter().for_each(|(_, other_exe)| {

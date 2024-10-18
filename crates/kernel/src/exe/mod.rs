@@ -1,5 +1,6 @@
 #![allow(clippy::mutable_key_type)]
 
+pub(crate) mod database;
 mod inner;
 
 use crate::{extract_exe, Error, ExeMap, Markov};
@@ -12,7 +13,7 @@ use std::{
 };
 
 #[derive(Debug, Default, Clone)]
-pub struct Exe(Arc<Mutex<ExeInner>>);
+pub struct Exe(pub(crate) Arc<Mutex<ExeInner>>);
 
 #[derive(Debug, Default, Clone)]
 pub struct ExeForMarkov(pub(crate) Weak<Mutex<ExeInner>>);
@@ -20,6 +21,14 @@ pub struct ExeForMarkov(pub(crate) Weak<Mutex<ExeInner>>);
 impl Exe {
     pub fn new(path: impl Into<PathBuf>) -> Self {
         Self(Arc::new(Mutex::new(ExeInner::new(path))))
+    }
+
+    /// Sequence number of the Exe assigned by [`State`](crate::State) during
+    /// runtime.
+    ///
+    /// By default it is zero.
+    pub fn seq(&self) -> Option<u64> {
+        self.0.lock().seq
     }
 
     pub(crate) fn for_markov(&self) -> ExeForMarkov {
@@ -105,9 +114,9 @@ impl Exe {
         self
     }
 
-    pub fn with_exemaps(self, exemaps: HashSet<ExeMap>) -> Self {
-        self.0.lock().with_exemaps(exemaps);
-        self
+    pub fn try_with_exemaps(self, exemaps: HashSet<ExeMap>) -> Result<Self, Error> {
+        self.0.lock().try_with_exemaps(exemaps)?;
+        Ok(self)
     }
 
     pub fn path(&self) -> PathBuf {
@@ -142,8 +151,11 @@ impl Exe {
         self.0.lock().time = time;
     }
 
+    /// Set the sequence number of the Exe.
+    ///
+    /// This is called by [`State`](crate::State) during runtime.
     pub fn set_seq(&self, seq: u64) {
-        self.0.lock().seq = seq;
+        self.0.lock().seq.replace(seq);
     }
 
     pub fn bid_in_maps(&self, last_running_timestamp: u64) {
@@ -162,10 +174,11 @@ mod tests {
     prop_compose! {
         fn arbitrary_map()(
             path in ".*",
-            offset in 0..u64::MAX,
-            length in 0..u64::MAX,
+            offset in 0..=u64::MAX,
+            length in 0..=u64::MAX,
+            update_time in 0..=u64::MAX,
         ) -> Map {
-            Map::new(path, offset, length)
+            Map::new(path, offset, length, update_time)
         }
     }
 
@@ -183,7 +196,9 @@ mod tests {
                 .iter()
                 .map(|m| m.map.length())
                 .fold(0, |acc, x| acc.wrapping_add(x));
-            let exe = Exe::new("foo").with_exemaps(exemaps);
+            let exe = Exe::new("foo");
+            exe.set_seq(1);
+            let exe = exe.try_with_exemaps(exemaps).unwrap();
             let exe_size = exe.size();
 
             assert_eq!(exe_size, map_sizes);

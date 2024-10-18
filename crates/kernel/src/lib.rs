@@ -1,3 +1,4 @@
+pub mod database;
 mod error;
 mod exe;
 mod exemap;
@@ -7,6 +8,7 @@ mod memstat;
 mod state;
 pub mod utils;
 
+pub use database::MIGRATOR;
 pub use error::Error;
 pub use exe::Exe;
 pub use exemap::ExeMap;

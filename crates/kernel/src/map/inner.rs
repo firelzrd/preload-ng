@@ -10,7 +10,7 @@ pub struct RuntimeStats {
     pub lnprob: f32,
 
     /// Unique map sequence number.
-    pub seq: u64,
+    pub seq: Option<u64>,
 
     /// On-disk location of the start of the map.
     pub block: Option<u64>,
@@ -29,17 +29,21 @@ pub struct MapInner {
     /// Length of the mapped section in bytes.
     pub length: u64,
 
+    /// Last time the map was probed.
+    pub update_time: u64,
+
     /// Runtime statistics related to the map.
     #[educe(Eq(ignore), Ord(ignore), Hash(ignore))]
     pub runtime: Mutex<RuntimeStats>,
 }
 
 impl MapInner {
-    pub fn new(path: impl Into<PathBuf>, offset: u64, length: u64) -> Self {
+    pub fn new(path: impl Into<PathBuf>, offset: u64, length: u64, update_time: u64) -> Self {
         Self {
             path: path.into(),
             length,
             offset,
+            update_time,
             ..Default::default()
         }
     }
