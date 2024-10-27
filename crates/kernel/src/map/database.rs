@@ -1,6 +1,7 @@
 use super::Map;
 use crate::{database::DatabaseWriteExt, Error};
 use sqlx::SqlitePool;
+use std::collections::HashMap;
 
 #[async_trait::async_trait]
 impl DatabaseWriteExt for Map {
@@ -53,9 +54,55 @@ impl DatabaseWriteExt for Map {
     }
 }
 
+#[async_trait::async_trait]
+pub trait MapDatabaseReadExt: Sized {
+    /// Read all maps from the database.
+    ///
+    /// The returned maps are stripped of their sequence numbers.
+    async fn read_all(pool: &SqlitePool) -> Result<HashMap<u64, Self>, Error>;
+}
+
+#[async_trait::async_trait]
+impl MapDatabaseReadExt for Map {
+    async fn read_all(pool: &SqlitePool) -> Result<HashMap<u64, Self>, Error> {
+        let records = sqlx::query!(
+            r#"
+            SELECT
+                id as "id: u64",
+                update_time as "update_time: u64",
+                offset as "offset: u64",
+                length as "length: u64",
+                path
+            FROM
+                maps
+        "#
+        )
+        .fetch_all(pool)
+        .await?;
+
+        let maps = records
+            .into_iter()
+            .map(|record| {
+                let map = Map::new(
+                    record.path,
+                    record.offset,
+                    record.length,
+                    record.update_time,
+                );
+                (record.id, map)
+            })
+            .collect();
+
+        Ok(maps)
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::mutable_key_type)]
+
     use super::*;
+    use std::collections::HashSet;
 
     #[sqlx::test]
     fn write_map(pool: SqlitePool) {
@@ -70,5 +117,19 @@ mod tests {
         let map = Map::new("a/b/c", 12, 13, 14);
         let result = map.write(&pool).await;
         assert!(result.is_err());
+    }
+
+    #[sqlx::test]
+    fn read_all_maps(pool: SqlitePool) {
+        let mut maps = HashSet::new();
+        for i in 0..10 {
+            let map = Map::new(format!("a/b/c/{}", i), i, i + 1, i + 2);
+            map.set_seq(i);
+            map.write(&pool).await.unwrap();
+            maps.insert(map);
+        }
+
+        let maps_read: HashSet<_> = Map::read_all(&pool).await.unwrap().into_values().collect();
+        assert_eq!(maps, maps_read);
     }
 }

@@ -10,9 +10,9 @@ pub mod utils;
 
 pub use database::MIGRATOR;
 pub use error::Error;
-pub use exe::Exe;
-pub use exemap::ExeMap;
-pub use map::{Map, RuntimeStats};
-pub use markov::{Markov, MarkovState};
+pub use exe::{database::ExeDatabaseReadExt, Exe};
+pub use exemap::{database::ExeMapDatabaseReadExt, ExeMap};
+pub use map::{database::MapDatabaseReadExt, Map, RuntimeStats};
+pub use markov::{database::MarkovDatabaseReadExt, Markov, MarkovState};
 pub use memstat::MemStat;
-pub use state::State;
+pub use state::{database::StateDatabaseReadExt, State};
