@@ -65,7 +65,7 @@ impl State {
             // we take a detour because we want to reject the sub-second part of
             // the duration.
             let sleep_duration =
-                Duration::from_secs((state.read().await.config.model.cycle.as_secs() + 1) / 2);
+                Duration::from_secs(state.read().await.config.model.cycle.as_secs().div_ceil(2));
             time::sleep(sleep_duration).await;
         }
     }

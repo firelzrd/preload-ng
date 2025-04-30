@@ -125,7 +125,7 @@ pub fn sanitize_file(path: &Path) -> Option<&Path> {
 /// assert_eq!(kb(2049), 3);
 /// ```
 pub const fn kb(x: u64) -> u64 {
-    (x + 1023) / 1024
+    x.div_ceil(1024)
 }
 
 /// Read ahead a file at a given offset and length.

@@ -528,7 +528,7 @@ impl StateInner {
 
         // TODO: the actual sleep takes place outside the function by the
         // caller. This leads to some duplication.
-        self.time += (self.config.model.cycle.as_secs() + 1) / 2;
+        self.time += self.config.model.cycle.as_secs().div_ceil(2);
         Ok(())
     }
 }
