@@ -104,7 +104,8 @@ Example: `memavailable = 90` means the planner can use 90% of available memory.
 
 ### `[persistence]`
 
-- `state_path`: Path to the SQLite state DB.
+- `state_path`: Path to the SQLite state DB. Defaults to
+  `$XDG_CACHE_HOME/preload-rs/state.db` (`~/.cache/preload-rs/state.db`).
 - `autosave_interval`: Optional override for autosave (seconds).
 - `save_on_shutdown`: Save state when the process exits cleanly.
 
@@ -141,4 +142,5 @@ Example: `memavailable = 90` means the planner can use 90% of available memory.
 - **"no config files found"**: preload-rs falls back to defaults. Add a config
   file and rerun or pass `--config`.
 - **No maps admitted**: check `minsize`, `exeprefix`, and `mapprefix` rules.
-- **No state DB**: set `state_path` or pass `--state`.
+- **No state DB**: defaults to `~/.cache/preload-rs/state.db`. Override with
+  `state_path` or `--state`.

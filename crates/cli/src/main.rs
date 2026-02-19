@@ -37,7 +37,7 @@ async fn main() -> anyhow::Result<()> {
         let repo = SqliteRepository::new(path.clone()).await?;
         Box::new(repo) as Box<dyn orchestrator::persistence::StateRepository>
     } else {
-        warn!("no persistence path provided; using in-memory state only");
+        warn!("no persistence path resolved (HOME not set?); using in-memory state only");
         Box::new(NoopRepository) as Box<dyn orchestrator::persistence::StateRepository>
     };
 
@@ -99,7 +99,22 @@ fn load_config_from_cli(cli: &Cli) -> anyhow::Result<Config> {
         config.persistence.state_path = Some(path);
     }
 
+    if config.persistence.state_path.is_none() {
+        config.persistence.state_path = default_state_path();
+    }
+
     Ok(config)
+}
+
+/// Resolve the default state database path via XDG Base Directory.
+fn default_state_path() -> Option<std::path::PathBuf> {
+    let cache_dir = std::env::var_os("XDG_CACHE_HOME")
+        .map(std::path::PathBuf::from)
+        .filter(|p| p.is_absolute())
+        .or_else(|| {
+            std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".cache"))
+        })?;
+    Some(cache_dir.join("preload-rs").join("state.db"))
 }
 
 /// Construct runtime services for a new configuration snapshot.

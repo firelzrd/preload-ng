@@ -43,7 +43,8 @@ policy_cache_ttl = 300
 policy_cache_capacity = 1024
 
 [persistence]
-# Optional path to the state database.
+# Path to the state database.
+# Defaults to $XDG_CACHE_HOME/preload-rs/state.db (~/.cache/preload-rs/state.db).
 # state_path = "/var/lib/preload-rs/state.db"
 # Optional override for autosave interval (seconds).
 # autosave_interval = 120
