@@ -75,7 +75,23 @@ impl PreloadEngine {
     /// Load state from the configured repository and build the engine.
     pub async fn load(config: Config, services: Services) -> Result<Self, Error> {
         let snapshot = services.repo.load().await?;
-        let stores = Self::stores_from_snapshot(snapshot, config.model.active_window.as_secs())?;
+        let mut stores =
+            Self::stores_from_snapshot(snapshot, config.model.active_window.as_secs())?;
+
+        // Purge maps whose paths are denied by the current admission policy.
+        let denied_keys: Vec<_> = stores
+            .maps
+            .iter()
+            .filter(|(_, map)| !services.admission.allow_map(&map.path))
+            .map(|(_, map)| map.key())
+            .collect();
+        if !denied_keys.is_empty() {
+            for key in &denied_keys {
+                stores.remove_map_by_key(key);
+            }
+            info!(removed = denied_keys.len(), "purged maps denied by prefix policy");
+        }
+
         Ok(Self {
             config,
             services,
@@ -813,5 +829,144 @@ mod tests {
             prop::array::uniform4(prop::array::uniform4(0f32..1f32)),
             0u64..10_000,
         )
+    }
+
+    /// An admission policy that denies maps under `/tmp/`.
+    #[derive(Debug)]
+    struct DenyTmpPolicy;
+
+    impl AdmissionPolicy for DenyTmpPolicy {
+        fn allow_exe(&self, _path: &Path) -> bool {
+            true
+        }
+        fn allow_map(&self, path: &Path) -> bool {
+            !path.starts_with("/tmp/")
+        }
+        fn decide(&self, _candidate: &CandidateExe) -> AdmissionDecision {
+            AdmissionDecision::Accept {
+                completeness: Completeness::Full,
+            }
+        }
+    }
+
+    /// A repository that returns a fixed snapshot.
+    struct FixedRepo(StoresSnapshot);
+
+    #[async_trait]
+    impl StateRepository for FixedRepo {
+        async fn load(&self) -> Result<StoresSnapshot, Error> {
+            Ok(self.0.clone())
+        }
+        async fn save(&self, _snapshot: &StoresSnapshot) -> Result<(), Error> {
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn load_purges_maps_denied_by_policy() {
+        use crate::persistence::{
+            ExeRecord, MapRecord, ExeMapRecord, SNAPSHOT_SCHEMA_VERSION, SnapshotMeta,
+            StateSnapshot, StoresSnapshot,
+        };
+        use crate::domain::MapKey;
+
+        let snapshot = StoresSnapshot {
+            meta: SnapshotMeta {
+                schema_version: SNAPSHOT_SCHEMA_VERSION,
+                app_version: None,
+                created_at: None,
+            },
+            state: StateSnapshot {
+                model_time: 100,
+                last_accounting_time: 100,
+                exes: vec![ExeRecord {
+                    path: "/usr/bin/app".into(),
+                    total_running_time: 10,
+                    last_seen_time: Some(100),
+                }],
+                maps: vec![
+                    MapRecord {
+                        path: "/usr/lib/lib.so".into(),
+                        offset: 0,
+                        length: 4096,
+                        update_time: 100,
+                    },
+                    MapRecord {
+                        path: "/tmp/cache.so".into(),
+                        offset: 0,
+                        length: 4096,
+                        update_time: 100,
+                    },
+                ],
+                exe_maps: vec![
+                    ExeMapRecord {
+                        exe_path: "/usr/bin/app".into(),
+                        map_key: MapKey::new("/usr/lib/lib.so", 0, 4096),
+                        prob: 1.0,
+                    },
+                    ExeMapRecord {
+                        exe_path: "/usr/bin/app".into(),
+                        map_key: MapKey::new("/tmp/cache.so", 0, 4096),
+                        prob: 1.0,
+                    },
+                ],
+                markov_edges: Vec::new(),
+            },
+        };
+
+        let hits = Arc::new(AtomicU32::new(0));
+        let config = Config::default();
+        let services = Services {
+            scanner: Box::new(StaticScanner),
+            admission: Box::new(DenyTmpPolicy),
+            updater: Box::new(Recording {
+                id: 1,
+                hits: hits.clone(),
+            }),
+            predictor: Box::new(Recording {
+                id: 1,
+                hits: hits.clone(),
+            }),
+            planner: Box::new(Recording {
+                id: 1,
+                hits: hits.clone(),
+            }),
+            prefetcher: Box::new(Recording {
+                id: 1,
+                hits: hits.clone(),
+            }),
+            repo: Box::new(FixedRepo(snapshot)),
+            clock: Box::new(crate::clock::SystemClock),
+        };
+
+        let engine = PreloadEngine::load(config, services)
+            .await
+            .expect("load should succeed");
+
+        let map_paths: HashSet<_> = engine
+            .stores
+            .maps
+            .iter()
+            .map(|(_, m)| m.path.clone())
+            .collect();
+
+        assert!(
+            map_paths.contains(std::path::Path::new("/usr/lib/lib.so")),
+            "allowed map should be retained"
+        );
+        assert!(
+            !map_paths.contains(std::path::Path::new("/tmp/cache.so")),
+            "denied map should be purged"
+        );
+
+        // Verify the exe-map link for the denied map was also cleaned up.
+        let exe_key = ExeKey::new("/usr/bin/app");
+        let exe_id = engine.stores.exes.id_by_key(&exe_key).unwrap();
+        let linked_maps: Vec<_> = engine
+            .stores
+            .exe_maps
+            .maps_for_exe(exe_id)
+            .collect();
+        assert_eq!(linked_maps.len(), 1, "only allowed map link should remain");
     }
 }
