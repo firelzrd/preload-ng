@@ -33,6 +33,7 @@ impl ProcfsScanner {
 
         Ok(MemStat {
             total: mem.mem_total,
+            available: mem.mem_available.unwrap_or(mem.mem_free + mem.cached),
             free: mem.mem_free,
             cached: mem.cached,
             pagein,

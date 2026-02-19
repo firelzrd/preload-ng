@@ -81,10 +81,10 @@ Controls the prefetch budget as a weighted sum of memory stats. Each value is a
 percentage clamped to `-100..=100`.
 
 - `memtotal`: Percent of total memory to include in budget.
-- `memfree`: Percent of free memory to include.
-- `memcached`: Percent of cached memory to include.
+- `memavailable`: Percent of available memory (MemAvailable from `/proc/meminfo`)
+  to include.
 
-Example: `memfree = 50` means the planner can use 50% of currently free memory.
+Example: `memavailable = 90` means the planner can use 90% of available memory.
 
 ### `[system]`
 

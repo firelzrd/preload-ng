@@ -21,8 +21,7 @@ pub trait PrefetchPlanner: Send + Sync {
 pub struct GreedyPrefetchPlanner {
     sort: SortStrategy,
     memtotal: i32,
-    memfree: i32,
-    memcached: i32,
+    memavailable: i32,
     sort_cache: Mutex<HashMap<MapId, Option<MapSortMeta>>>,
 }
 
@@ -32,18 +31,15 @@ impl GreedyPrefetchPlanner {
         Self {
             sort: config.system.sortstrategy,
             memtotal: policy.memtotal,
-            memfree: policy.memfree,
-            memcached: policy.memcached,
+            memavailable: policy.memavailable,
             sort_cache: Mutex::new(HashMap::new()),
         }
     }
 
     fn available_kb(&self, mem: &MemStat) -> u64 {
-        let mut available = self.memtotal as i64 * mem.total as i64 / 100;
-        available += self.memfree as i64 * mem.free as i64 / 100;
-        available = available.max(0);
-        available += self.memcached as i64 * mem.cached as i64 / 100;
-        available.max(0) as u64
+        let mut budget = self.memtotal as i64 * mem.total as i64 / 100;
+        budget += self.memavailable as i64 * mem.available as i64 / 100;
+        budget.max(0) as u64
     }
 
     fn kb(bytes: u64) -> u64 {
@@ -238,14 +234,12 @@ mod tests {
         fn planner_respects_budget_and_uniqueness(
             maps in prop::collection::vec((1u64..8192, 0f32..1f32), 0..20),
             memtotal in -100i32..100,
-            memfree in -100i32..100,
-            memcached in -100i32..100,
+            memavailable in -100i32..100,
             total in 0u64..1024,
-            free in 0u64..1024,
-            cached in 0u64..1024,
+            available in 0u64..1024,
         ) {
             let mut config = Config::default();
-            config.model.memory = MemoryPolicy { memtotal, memfree, memcached };
+            config.model.memory = MemoryPolicy { memtotal, memavailable };
             config.system.sortstrategy = SortStrategy::None;
 
             let planner = GreedyPrefetchPlanner::new(&config);
@@ -264,8 +258,9 @@ mod tests {
 
             let mem = MemStat {
                 total,
-                free,
-                cached,
+                available,
+                free: 0,
+                cached: 0,
                 pagein: 0,
                 pageout: 0,
             };

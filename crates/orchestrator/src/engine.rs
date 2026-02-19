@@ -461,6 +461,7 @@ mod tests {
                 ObservationEvent::MemStat {
                     mem: MemStat {
                         total: 1,
+                        available: 1,
                         free: 1,
                         cached: 1,
                         pagein: 0,

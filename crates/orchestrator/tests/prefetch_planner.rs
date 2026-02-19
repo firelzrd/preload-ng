@@ -14,8 +14,7 @@ fn planner_selects_maps_within_budget() {
     let mut config = Config::default();
     config.model.memory = MemoryPolicy {
         memtotal: 0,
-        memfree: 100,
-        memcached: 0,
+        memavailable: 100,
     };
     config.system.sortstrategy = SortStrategy::None;
 
@@ -33,6 +32,7 @@ fn planner_selects_maps_within_budget() {
 
     let mem = MemStat {
         total: 0,
+        available: 3,
         free: 3,
         cached: 0,
         pagein: 0,
@@ -58,8 +58,7 @@ fn planner_sorts_by_block_with_score_tiebreak() {
     let mut config = Config::default();
     config.model.memory = MemoryPolicy {
         memtotal: 0,
-        memfree: 100,
-        memcached: 0,
+        memavailable: 100,
     };
     config.system.sortstrategy = SortStrategy::Block;
 
@@ -77,6 +76,7 @@ fn planner_sorts_by_block_with_score_tiebreak() {
 
     let mem = MemStat {
         total: 0,
+        available: 64,
         free: 64,
         cached: 0,
         pagein: 0,
@@ -102,8 +102,7 @@ fn planner_sorts_by_inode_with_score_tiebreak() {
     let mut config = Config::default();
     config.model.memory = MemoryPolicy {
         memtotal: 0,
-        memfree: 100,
-        memcached: 0,
+        memavailable: 100,
     };
     config.system.sortstrategy = SortStrategy::Inode;
 
@@ -119,6 +118,7 @@ fn planner_sorts_by_inode_with_score_tiebreak() {
 
     let mem = MemStat {
         total: 0,
+        available: 64,
         free: 64,
         cached: 0,
         pagein: 0,

@@ -17,9 +17,8 @@ decay = 0.01
 
 [model.memory]
 # Memory budget policy (percentages, clamped to -100..=100).
-memtotal = -10
-memfree = 50
-memcached = 0
+memtotal = -5
+memavailable = 95
 
 [system]
 # Enable scanning and prediction.

@@ -107,6 +107,7 @@ async fn engine_tick_flows_through_pipeline() {
         ObservationEvent::MemStat {
             mem: MemStat {
                 total: 0,
+                available: 64,
                 free: 64,
                 cached: 0,
                 pagein: 0,
@@ -124,8 +125,7 @@ async fn engine_tick_flows_through_pipeline() {
     config.model.minsize = 1;
     config.model.memory = MemoryPolicy {
         memtotal: 0,
-        memfree: 100,
-        memcached: 0,
+        memavailable: 100,
     };
     config.system.exeprefix = vec!["!/".into(), "/test/".into()];
     config.system.mapprefix = vec!["!/".into(), "/test/".into()];
