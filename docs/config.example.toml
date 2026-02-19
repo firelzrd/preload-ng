@@ -7,7 +7,7 @@ cycle = 20
 # Whether to use correlation in prediction.
 use_correlation = true
 # Minimum total mapped bytes to track an executable.
-minsize = 2000000
+minsize = 100000
 # Active-set window for lazy Markov edges.
 active_window = 21600
 # Optional half-life for exponential decay (seconds). Overrides decay when set.

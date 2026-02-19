@@ -38,7 +38,7 @@ impl Default for Model {
         Self {
             cycle: Duration::from_secs(20),
             use_correlation: true,
-            minsize: 2_000_000,
+            minsize: 100_000,
             active_window: Duration::from_secs(6 * 60 * 60),
             half_life: None,
             decay: 0.01,
