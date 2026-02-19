@@ -110,8 +110,19 @@ impl Predictor for MarkovPredictor {
             if exe.running {
                 prediction.exe_scores.insert(exe_id, 0.0);
             } else {
-                let not_needed_prob = not_needed.get(&exe_id).copied().unwrap_or(1.0);
-                let needed = (1.0 - not_needed_prob).clamp(0.0, 1.0);
+                let markov_needed = not_needed
+                    .get(&exe_id)
+                    .map(|p| (1.0 - p).clamp(0.0, 1.0))
+                    .unwrap_or(0.0);
+                // Base probability from historical usage frequency.
+                let base_prob = if stores.model_time > 0 {
+                    (exe.total_running_time as f32 / stores.model_time as f32).clamp(0.0, 1.0)
+                } else {
+                    0.0
+                };
+                // Minimum score ensures all observed exes are prefetch candidates.
+                // Budget and sort order ensure high-confidence predictions come first.
+                let needed = markov_needed.max(base_prob).max(1e-6);
                 prediction.exe_scores.insert(exe_id, needed);
             }
         }
