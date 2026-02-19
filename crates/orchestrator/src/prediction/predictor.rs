@@ -25,7 +25,9 @@ impl MarkovPredictor {
         }
     }
 
-    fn correlation(&self, stores: &Stores, a: ExeId, b: ExeId, ab_time: u64) -> f32 {
+    /// Compute the phi coefficient between two exes.
+    /// Returns `None` when the statistic is indeterminate (insufficient data).
+    fn correlation(&self, stores: &Stores, a: ExeId, b: ExeId, ab_time: u64) -> Option<f32> {
         let t = stores.model_time;
         let a_time = stores
             .exes
@@ -39,13 +41,13 @@ impl MarkovPredictor {
             .unwrap_or(0);
 
         if t == 0 || a_time == 0 || b_time == 0 || a_time >= t || b_time >= t {
-            return 0.0;
+            return None;
         }
 
         let numerator = (t as f32 * ab_time as f32) - (a_time as f32 * b_time as f32);
         let denom =
             (a_time as f32 * b_time as f32 * (t - a_time) as f32 * (t - b_time) as f32).sqrt();
-        if denom == 0.0 { 0.0 } else { numerator / denom }
+        if denom == 0.0 { None } else { Some(numerator / denom) }
     }
 
     fn p_needed(
@@ -80,24 +82,22 @@ impl Predictor for MarkovPredictor {
 
             let state = MarkovState::from_running(a_running, b_running);
 
+            let corr = if self.use_correlation {
+                self.correlation(stores, a, b, edge.both_running_time)
+                    .map(|c| c.abs())
+                    .unwrap_or(1.0)
+            } else {
+                1.0
+            };
+
             if !a_running {
                 let base = Self::p_needed(edge, state, MarkovState::AOnly, self.cycle_secs);
-                let corr = if self.use_correlation {
-                    self.correlation(stores, a, b, edge.both_running_time).abs()
-                } else {
-                    1.0
-                };
                 let p = (base * corr).clamp(0.0, 1.0);
                 let entry = not_needed.entry(a).or_insert(1.0);
                 *entry *= 1.0 - p;
             }
             if !b_running {
                 let base = Self::p_needed(edge, state, MarkovState::BOnly, self.cycle_secs);
-                let corr = if self.use_correlation {
-                    self.correlation(stores, a, b, edge.both_running_time).abs()
-                } else {
-                    1.0
-                };
                 let p = (base * corr).clamp(0.0, 1.0);
                 let entry = not_needed.entry(b).or_insert(1.0);
                 *entry *= 1.0 - p;
