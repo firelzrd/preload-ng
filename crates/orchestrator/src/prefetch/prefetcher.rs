@@ -6,6 +6,7 @@ use async_trait::async_trait;
 use futures::stream::{self, StreamExt};
 use nix::fcntl::PosixFadviseAdvice;
 use std::fs::OpenOptions;
+use std::io::{Read, Seek, SeekFrom};
 use std::os::unix::fs::OpenOptionsExt;
 use tracing::warn;
 
@@ -36,17 +37,34 @@ impl PosixFadvisePrefetcher {
     }
 
     fn readahead(path: &std::path::Path, offset: i64, length: i64) -> Result<(), std::io::Error> {
-        let file = OpenOptions::new()
+        let mut file = OpenOptions::new()
             .read(true)
             .custom_flags(libc::O_NOCTTY | libc::O_NOATIME)
             .open(path)?;
-        nix::fcntl::posix_fadvise(
+
+        // Hint sequential access for kernel readahead optimization.
+        let _ = nix::fcntl::posix_fadvise(
             &file,
             offset,
             length,
-            PosixFadviseAdvice::POSIX_FADV_WILLNEED,
-        )
-        .map_err(std::io::Error::other)?;
+            PosixFadviseAdvice::POSIX_FADV_SEQUENTIAL,
+        );
+
+        // Actually read the data to guarantee it lands in page cache.
+        if offset > 0 {
+            file.seek(SeekFrom::Start(offset as u64))?;
+        }
+        let mut remaining = length as u64;
+        let mut buf = vec![0u8; 128 * 1024]; // 128 KiB chunks
+        while remaining > 0 {
+            let to_read = (remaining as usize).min(buf.len());
+            let n = file.read(&mut buf[..to_read])?;
+            if n == 0 {
+                break;
+            }
+            remaining -= n as u64;
+        }
+
         Ok(())
     }
 }
