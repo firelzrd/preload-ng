@@ -32,10 +32,10 @@ impl ProcfsScanner {
         let pageout = vm.get("pgpgout").map(|v| v * page / 1024).unwrap_or(0);
 
         Ok(MemStat {
-            total: mem.mem_total,
-            available: mem.mem_available.unwrap_or(mem.mem_free + mem.cached),
-            free: mem.mem_free,
-            cached: mem.cached,
+            total: mem.mem_total / 1024,
+            available: mem.mem_available.unwrap_or(mem.mem_free + mem.cached) / 1024,
+            free: mem.mem_free / 1024,
+            cached: mem.cached / 1024,
             pagein,
             pageout,
         })
