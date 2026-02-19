@@ -29,6 +29,19 @@ impl ExeMapIndex {
             .flat_map(|set| set.iter().copied())
     }
 
+    pub fn detach_map(&mut self, map_id: MapId) {
+        if let Some(exes) = self.map_to_exes.remove(&map_id) {
+            for exe_id in exes {
+                if let Some(maps) = self.exe_to_maps.get_mut(&exe_id) {
+                    maps.remove(&map_id);
+                    if maps.is_empty() {
+                        self.exe_to_maps.remove(&exe_id);
+                    }
+                }
+            }
+        }
+    }
+
     pub fn remove_exe(&mut self, exe_id: ExeId) {
         if let Some(maps) = self.exe_to_maps.remove(&exe_id) {
             for map_id in maps {

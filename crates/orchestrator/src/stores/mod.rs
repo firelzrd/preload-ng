@@ -49,6 +49,13 @@ impl Stores {
         self.markov.ensure_edge(a, b, now, state)
     }
 
+    pub fn remove_map_by_key(&mut self, key: &crate::domain::MapKey) {
+        if let Some(id) = self.maps.id_by_key(key) {
+            self.exe_maps.detach_map(id);
+            self.maps.remove(id);
+        }
+    }
+
     pub fn active_exes(&self) -> HashSet<ExeId> {
         self.active.exes()
     }

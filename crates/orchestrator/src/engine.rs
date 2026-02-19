@@ -147,6 +147,20 @@ impl PreloadEngine {
 
         let prefetch = self.services.prefetcher.execute(&plan, &self.stores).await;
 
+        // Remove maps whose files no longer exist on disk.
+        if !prefetch.failures.is_empty() {
+            let mut removed = 0usize;
+            for key in &prefetch.failures {
+                if !key.path.exists() {
+                    self.stores.remove_map_by_key(key);
+                    removed += 1;
+                }
+            }
+            if removed > 0 {
+                info!(removed, "purged stale maps for missing files");
+            }
+        }
+
         // Advance model time by one cycle.
         self.stores.model_time = self
             .stores

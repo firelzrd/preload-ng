@@ -33,6 +33,15 @@ impl MapStore {
         self.by_key.get(key).copied()
     }
 
+    pub fn remove(&mut self, id: MapId) -> bool {
+        if self.maps.remove(id).is_some() {
+            self.by_key.retain(|_, v| *v != id);
+            true
+        } else {
+            false
+        }
+    }
+
     pub fn iter(&self) -> impl Iterator<Item = (MapId, &MapSegment)> {
         self.maps.iter()
     }
