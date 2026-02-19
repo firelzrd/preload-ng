@@ -1,7 +1,7 @@
 use clap::Parser;
 use std::path::{Path, PathBuf};
 
-/// Command line interface for preload-rs.
+/// Command line interface for preload-ng.
 #[derive(Debug, Parser, Clone)]
 #[command(about, long_about, version)]
 pub struct Cli {
@@ -122,16 +122,16 @@ fn collect_toml(dir: &Path, strict: bool) -> Result<Vec<PathBuf>, std::io::Error
 }
 
 fn system_config_path() -> Option<PathBuf> {
-    Some(PathBuf::from("/etc/preload-rs/config.toml"))
+    Some(PathBuf::from("/etc/preload-ng/config.toml"))
 }
 
 fn system_config_dir() -> Option<PathBuf> {
-    Some(PathBuf::from("/etc/preload-rs/config.d"))
+    Some(PathBuf::from("/etc/preload-ng/config.d"))
 }
 
 fn user_config_path() -> Option<PathBuf> {
     let xdg = std::env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")));
-    xdg.map(|dir| dir.join("preload-rs").join("config.toml"))
+    xdg.map(|dir| dir.join("preload-ng").join("config.toml"))
 }

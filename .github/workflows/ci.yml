@@ -82,10 +82,10 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Nightly build
-        run: cargo build -p preload-rs --all-features --release
+        run: cargo build -p preload-ng --all-features --release
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v6
         with:
           name: preload-nightly
-          path: target/release/preload-rs
+          path: target/release/preload-ng

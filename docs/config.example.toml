@@ -1,4 +1,4 @@
-# preload-rs example configuration
+# preload-ng example configuration
 # Time values are in seconds unless noted.
 
 [model]
@@ -44,8 +44,8 @@ policy_cache_capacity = 1024
 
 [persistence]
 # Path to the state database.
-# Defaults to $XDG_CACHE_HOME/preload-rs/state.db (~/.cache/preload-rs/state.db).
-# state_path = "/var/lib/preload-rs/state.db"
+# Defaults to $XDG_CACHE_HOME/preload-ng/state.db (~/.cache/preload-ng/state.db).
+# state_path = "/var/lib/preload-ng/state.db"
 # Optional override for autosave interval (seconds).
 # autosave_interval = 120
 save_on_shutdown = true

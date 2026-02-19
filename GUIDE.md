@@ -1,11 +1,11 @@
-# preload-rs Guide
+# preload-ng Guide
 
-This guide is for end users. It explains how to run preload-rs, how
+This guide is for end users. It explains how to run preload-ng, how
 configuration works, and what each setting does.
 
-## What preload-rs does
+## What preload-ng does
 
-preload-rs watches the programs you run and learns which binaries and shared
+preload-ng watches the programs you run and learns which binaries and shared
 libraries are likely to be used next. It then prefetches those files into memory
 so program startup feels faster. It is designed for Linux systems.
 
@@ -17,7 +17,7 @@ so program startup feels faster. It is designed for Linux systems.
    cp docs/config.example.toml config.toml
    ```
 
-2. Run preload-rs:
+2. Run preload-ng:
 
    ```bash
    cargo run -p cli --
@@ -44,12 +44,12 @@ so program startup feels faster. It is designed for Linux systems.
 If `--config` is provided, that file is used first. If `--config-dir` is also
 provided, any `.toml` files in that directory are appended (sorted by name).
 
-If `--config` is not provided, preload-rs searches in this order (later files
+If `--config` is not provided, preload-ng searches in this order (later files
 override earlier ones):
 
-1. `/etc/preload-rs/config.toml` (if it exists)
-2. `/etc/preload-rs/config.d/*.toml` (sorted)
-3. `$XDG_CONFIG_HOME/preload-rs/config.toml` (or `$HOME/.config/preload-rs/config.toml`)
+1. `/etc/preload-ng/config.toml` (if it exists)
+2. `/etc/preload-ng/config.d/*.toml` (sorted)
+3. `$XDG_CONFIG_HOME/preload-ng/config.toml` (or `$HOME/.config/preload-ng/config.toml`)
 4. `./config.toml` (current directory)
 5. `--config-dir` (if provided, sorted)
 
@@ -105,7 +105,7 @@ Example: `memavailable = 90` means the planner can use 90% of available memory.
 ### `[persistence]`
 
 - `state_path`: Path to the SQLite state DB. Defaults to
-  `$XDG_CACHE_HOME/preload-rs/state.db` (`~/.cache/preload-rs/state.db`).
+  `$XDG_CACHE_HOME/preload-ng/state.db` (`~/.cache/preload-ng/state.db`).
 - `autosave_interval`: Optional override for autosave (seconds).
 - `save_on_shutdown`: Save state when the process exits cleanly.
 
@@ -139,8 +139,8 @@ Example: `memavailable = 90` means the planner can use 90% of available memory.
 
 ## Troubleshooting
 
-- **"no config files found"**: preload-rs falls back to defaults. Add a config
+- **"no config files found"**: preload-ng falls back to defaults. Add a config
   file and rerun or pass `--config`.
 - **No maps admitted**: check `minsize`, `exeprefix`, and `mapprefix` rules.
-- **No state DB**: defaults to `~/.cache/preload-rs/state.db`. Override with
+- **No state DB**: defaults to `~/.cache/preload-ng/state.db`. Override with
   `state_path` or `--state`.

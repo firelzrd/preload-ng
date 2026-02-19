@@ -133,7 +133,7 @@ Cons:
 ## References
 
 - Behdad Esfahbod, "Preload — An Adaptive Prefetching Daemon", 2006.
-- Existing preload-rs kernel implementation (current workspace).
+- Existing preload-ng kernel implementation (current workspace).
 
 ## Addendum: Markov Edge Strategy (Active-Set Lazy)
 

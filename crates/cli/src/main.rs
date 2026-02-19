@@ -114,7 +114,7 @@ fn default_state_path() -> Option<std::path::PathBuf> {
         .or_else(|| {
             std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".cache"))
         })?;
-    Some(cache_dir.join("preload-rs").join("state.db"))
+    Some(cache_dir.join("preload-ng").join("state.db"))
 }
 
 /// Construct runtime services for a new configuration snapshot.

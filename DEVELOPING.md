@@ -1,4 +1,4 @@
-# Developing preload-rs
+# Developing preload-ng
 
 This document is for contributors (human or AI). It explains the repository
 layout, runtime design, contracts, and how to work on the codebase.
