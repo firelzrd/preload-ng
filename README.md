@@ -1,6 +1,6 @@
 # preload-ng
 
-A fork of [arunanshub/preload-rs](https://github.com/arunanshub/preload-rs).
+The [preload-rs](https://github.com/arunanshub/preload-rs)-fork that I wanted.
 
 preload-ng is a daemon that monitors running processes, predicts which applications will be launched next using a Markov chain, and prefetches their binaries and shared libraries into the page cache.  
 This fork refines memory accounting, improves the prediction model, adds fanotify-based file monitoring, and makes prefetching reliable out of the box.
@@ -14,7 +14,7 @@ This fork refines memory accounting, improves the prediction model, adds fanotif
 
 ### Improved prediction model
 
-- **Default to corr=1.0 for insufficient data**: The original returned `corr=0.0` when statistical data was sparse, which zeroed out prediction scores for newly observed executables. Now defaults to `1.0` (assume full correlation) so new applications can be predicted immediately.
+- **Conservative fallback for insufficient correlation data**: The original returned `corr=0.0` when statistical data was sparse, which zeroed out prediction scores for newly observed executables. Now defaults to `f32::MIN_POSITIVE` so that Markov predictions are not over-weighted without evidence, while the base-probability floor (`1e-6`) and usage-frequency score still keep every observed executable as a prefetch candidate.
 - **Score all observed exes by usage frequency**: Executables without Markov edges previously scored zero and were never prefetched. Added a base probability from `total_running_time / model_time` with a minimum floor, so every observed executable becomes a candidate.
 - **Skip already-cached maps**: Running executables (score=0) were still included in the prefetch plan, wasting budget. Now breaks early when scores drop to zero.
 - **Stable sorting with total_cmp**: Replaced `partial_cmp` with `total_cmp` for deterministic ordering regardless of NaN values.

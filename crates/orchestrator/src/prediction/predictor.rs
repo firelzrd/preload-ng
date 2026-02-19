@@ -85,7 +85,7 @@ impl Predictor for MarkovPredictor {
             let corr = if self.use_correlation {
                 self.correlation(stores, a, b, edge.both_running_time)
                     .map(|c| c.abs())
-                    .unwrap_or(1.0)
+                    .unwrap_or(f32::MIN_POSITIVE)
             } else {
                 1.0
             };
