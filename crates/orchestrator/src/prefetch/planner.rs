@@ -79,13 +79,16 @@ impl PrefetchPlanner for GreedyPrefetchPlanner {
             .iter()
             .map(|(id, score)| (*id, *score))
             .collect();
-        items.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
+        items.sort_by(|a, b| b.1.total_cmp(&a.1));
 
         let mut budget_kb = self.available_kb(memstat);
         let mut selected = Vec::new();
         let mut total_bytes: u64 = 0;
 
         for (map_id, score) in items {
+            if score <= 0.0 {
+                break; // sorted descending; all remaining scores are <= 0
+            }
             let Some(map) = stores.maps.get(map_id) else {
                 continue;
             };
@@ -202,11 +205,7 @@ enum SortKey {
 
 fn sort_by_score_and_key<K: Ord>(items: &mut [SelectedWithKey<K>]) {
     items.sort_by(|a, b| {
-        let score_cmp = b
-            .item
-            .score
-            .partial_cmp(&a.item.score)
-            .unwrap_or(Ordering::Equal);
+        let score_cmp = b.item.score.total_cmp(&a.item.score);
         if score_cmp != Ordering::Equal {
             return score_cmp;
         }
@@ -214,7 +213,9 @@ fn sort_by_score_and_key<K: Ord>(items: &mut [SelectedWithKey<K>]) {
             (Some(a_key), Some(b_key)) => a_key
                 .cmp(b_key)
                 .then_with(|| a.item.index.cmp(&b.item.index)),
-            _ => a.item.index.cmp(&b.item.index),
+            (Some(_), None) => Ordering::Less,
+            (None, Some(_)) => Ordering::Greater,
+            (None, None) => a.item.index.cmp(&b.item.index),
         }
     });
 }
