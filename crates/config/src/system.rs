@@ -35,6 +35,9 @@ pub struct System {
 
     /// Maximum number of cached admission rejections. 0 disables caching.
     pub policy_cache_capacity: usize,
+
+    /// Enable fanotify file-open monitoring for broader prefetch coverage.
+    pub fanotify: bool,
 }
 
 impl Default for System {
@@ -60,6 +63,7 @@ impl Default for System {
             prefetch_concurrency: None,
             policy_cache_ttl: Duration::from_secs(300),
             policy_cache_capacity: 1024,
+            fanotify: true,
         }
     }
 }

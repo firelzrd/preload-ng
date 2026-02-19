@@ -2,6 +2,7 @@
 
 mod admission;
 mod event;
+pub mod fanotify_watcher;
 mod model_updater;
 mod procfs_scanner;
 
@@ -11,6 +12,7 @@ pub use admission::{
 };
 pub use event::{Observation, ObservationEvent, ScanWarning};
 pub use model_updater::{DefaultModelUpdater, ModelDelta, ModelUpdater};
+pub use fanotify_watcher::FanotifyWatcher;
 pub use procfs_scanner::ProcfsScanner;
 
 use crate::error::Error;

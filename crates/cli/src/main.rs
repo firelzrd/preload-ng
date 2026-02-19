@@ -9,7 +9,7 @@ use config::Config;
 use orchestrator::{
     ControlEvent, PreloadEngine, ReloadBundle, Services,
     clock::SystemClock,
-    observation::{DefaultAdmissionPolicy, DefaultModelUpdater, ProcfsScanner},
+    observation::{DefaultAdmissionPolicy, DefaultModelUpdater, FanotifyWatcher, ProcfsScanner},
     persistence::{NoopRepository, SqliteRepository},
     prediction::MarkovPredictor,
     prefetch::{GreedyPrefetchPlanner, NoopPrefetcher, PosixFadvisePrefetcher, Prefetcher},
@@ -25,6 +25,12 @@ async fn main() -> anyhow::Result<()> {
     init_tracing(cli.verbose);
     let config = load_config_from_cli(&cli)?;
 
+    let fanotify = if config.system.fanotify {
+        FanotifyWatcher::try_new()
+    } else {
+        None
+    };
+
     let repo = if cli.no_persist {
         Box::new(NoopRepository) as Box<dyn orchestrator::persistence::StateRepository>
     } else if let Some(path) = &config.persistence.state_path {
@@ -38,7 +44,7 @@ async fn main() -> anyhow::Result<()> {
     let reload_bundle = build_reload_bundle(config.clone(), cli.no_prefetch);
 
     let services = Services {
-        scanner: Box::new(ProcfsScanner),
+        scanner: Box::new(ProcfsScanner::new(fanotify)),
         admission: reload_bundle.admission,
         updater: reload_bundle.updater,
         predictor: reload_bundle.predictor,

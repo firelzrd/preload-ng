@@ -2,14 +2,30 @@
 
 use crate::domain::{MapSegment, MemStat};
 use crate::error::Error;
+use crate::observation::fanotify_watcher::FanotifyWatcher;
 use crate::observation::{Observation, ObservationEvent, ScanWarning, Scanner};
 use procfs::process::MMapPath;
 use procfs::{Current, Meminfo, page_size, vmstat};
 use std::path::{Path, PathBuf};
-use tracing::{trace, warn};
+use std::sync::Arc;
+use tracing::{info, trace, warn};
 
-#[derive(Debug, Default)]
-pub struct ProcfsScanner;
+#[derive(Debug)]
+pub struct ProcfsScanner {
+    fanotify: Option<Arc<FanotifyWatcher>>,
+}
+
+impl ProcfsScanner {
+    pub fn new(fanotify: Option<Arc<FanotifyWatcher>>) -> Self {
+        Self { fanotify }
+    }
+}
+
+impl Default for ProcfsScanner {
+    fn default() -> Self {
+        Self { fanotify: None }
+    }
+}
 
 impl ProcfsScanner {
     fn sanitize_path(path: &Path) -> Option<PathBuf> {
@@ -17,7 +33,7 @@ impl ProcfsScanner {
             return None;
         }
         let path_str = path.to_str()?;
-        if path_str.contains("(deleted)") {
+        if path_str.contains("(deleted)") || !path.exists() {
             return None;
         }
         let trimmed = path_str.split(".#prelink#.").next()?;
@@ -98,6 +114,15 @@ impl Scanner for ProcfsScanner {
                     });
                 }
             }
+        }
+
+        // Drain fanotify events (file-open monitoring).
+        if let Some(watcher) = &self.fanotify {
+            let fan_events = watcher.drain(time);
+            let fan_exes = fan_events.iter().filter(|e| matches!(e, ObservationEvent::ExeSeen { .. })).count();
+            let fan_maps = fan_events.iter().filter(|e| matches!(e, ObservationEvent::MapSeen { .. })).count();
+            info!(fan_exes, fan_maps, "fanotify drain");
+            events.extend(fan_events);
         }
 
         if let Ok(mem) = Self::read_memstat() {

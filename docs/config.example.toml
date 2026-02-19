@@ -30,6 +30,9 @@ autosave = 3600
 exeprefix = ["!/usr/sbin/", "!/usr/local/sbin/", "/"]
 # Mapped file prefixes to include/exclude. "!" means deny. Longest match wins.
 mapprefix = ["!/proc/", "!/sys/", "!/dev/", "!/tmp/", "!/run/", "/"]
+# Enable fanotify file-open monitoring for broader prefetch coverage.
+# Requires CAP_SYS_ADMIN. Falls back gracefully if unavailable.
+fanotify = true
 # Prefetch sort strategy: none | path | block | inode.
 sortstrategy = "block"
 # Prefetch worker concurrency. Omit for auto (CPU cores). 0 disables prefetch.

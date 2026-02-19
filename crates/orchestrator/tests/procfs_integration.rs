@@ -21,7 +21,7 @@ async fn procfs_scanner_observes_current_exe() {
     config.system.dopredict = false;
 
     let services = Services {
-        scanner: Box::new(ProcfsScanner),
+        scanner: Box::new(ProcfsScanner::default()),
         admission: Box::new(DefaultAdmissionPolicy::new(&config)),
         updater: Box::new(DefaultModelUpdater::new(&config)),
         predictor: Box::new(MarkovPredictor::new(&config)),
