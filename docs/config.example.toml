@@ -26,10 +26,10 @@ doscan = true
 dopredict = true
 # Autosave interval in seconds.
 autosave = 3600
-# Executable path prefixes to include/exclude. "!" means deny.
-exeprefix = ["!/usr/sbin/", "!/usr/local/sbin/", "/usr/", "!/"]
-# Mapped file prefixes to include/exclude. "!" means deny.
-mapprefix = ["/usr/", "/lib/", "/var/cache/", "!/"]
+# Executable path prefixes to include/exclude. "!" means deny. Longest match wins.
+exeprefix = ["!/usr/sbin/", "!/usr/local/sbin/", "/"]
+# Mapped file prefixes to include/exclude. "!" means deny. Longest match wins.
+mapprefix = ["!/proc/", "!/sys/", "!/dev/", "!/tmp/", "!/run/", "/"]
 # Prefetch sort strategy: none | path | block | inode.
 sortstrategy = "block"
 # Prefetch worker concurrency. Omit for auto (CPU cores). 0 disables prefetch.
