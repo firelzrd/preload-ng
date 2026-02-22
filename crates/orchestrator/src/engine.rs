@@ -236,7 +236,16 @@ impl PreloadEngine {
                 let elapsed = tick_start.elapsed();
                 if elapsed < self.config.model.cycle {
                     let sleep_for = self.config.model.cycle - elapsed;
-                    self.services.clock.sleep(sleep_for).await;
+                    tokio::select! {
+                        _ = cancel.cancelled() => {
+                            if self.config.persistence.save_on_shutdown {
+                                let _ = self.save().await;
+                            }
+                            info!("shutdown requested");
+                            break;
+                        }
+                        _ = self.services.clock.sleep(sleep_for) => {}
+                    }
                 }
             }
         }
