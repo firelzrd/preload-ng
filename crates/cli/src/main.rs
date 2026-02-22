@@ -1,6 +1,7 @@
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 
 mod cli;
+mod priority;
 mod signals;
 
 use clap::Parser;
@@ -26,6 +27,7 @@ use tracing_subscriber::EnvFilter;
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     init_tracing(cli.verbose);
+    priority::lower_process_priority();
     let config = load_config_from_cli(&cli)?;
 
     let fanotify = if config.system.fanotify {

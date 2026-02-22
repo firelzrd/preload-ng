@@ -129,7 +129,9 @@ target platform.
 
 ## Working conventions
 
-- **No unsafe:** every crate has `#![forbid(unsafe_code)]`.
+- **No unsafe:** every module defaults to `#![forbid(unsafe_code)]`.
+  Modules that require platform syscalls (e.g. `prefetcher.rs`, `priority.rs`)
+  use `#![deny(unsafe_code)]` with targeted `#[allow(unsafe_code)]` blocks.
 - **Logging:** use `tracing` macros (not `println!`).
 - **Error handling:** avoid `unwrap`, use `Result<T, E>`.
 - **Formatting/lints/tests:**

@@ -38,11 +38,15 @@ fanotify = true
 # readahead: readahead(2) syscall — no userspace buffer copy.
 # madvise: mmap + madvise(MADV_WILLNEED) — effective for large files.
 # read: posix_fadvise + read loop — traditional portable method.
-# prefetch_backend = "auto"
+prefetch_backend = "auto"
+# Note: preload-ng automatically sets nice(19) and ionice IDLE class at
+# startup to minimize impact on foreground applications.
 # Prefetch sort strategy: none | path | block | inode.
 sortstrategy = "block"
-# Prefetch worker concurrency. Omit for auto (CPU cores). 0 disables prefetch.
-# prefetch_concurrency = 8
+# Prefetch worker concurrency. Default: 1. 0 disables prefetch.
+# Higher values prefetch more files in parallel but use more I/O bandwidth.
+# Omit or comment out to use all CPU cores (auto).
+prefetch_concurrency = 1
 # Cache admission rejections (TTL in seconds). 0 disables caching.
 policy_cache_ttl = 300
 # Max number of cached rejection entries. 0 disables caching.

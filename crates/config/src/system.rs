@@ -35,7 +35,8 @@ pub struct System {
     /// Prefetch sort strategy.
     pub sortstrategy: SortStrategy,
 
-    /// Max number of concurrent prefetch workers. None means auto (CPU cores).
+    /// Max number of concurrent prefetch workers. Default: 1.
+    /// None (omitted from config) falls back to CPU core count.
     /// 0 disables prefetch entirely.
     pub prefetch_concurrency: Option<usize>,
 
@@ -73,7 +74,7 @@ impl Default for System {
                 "/".into(),
             ],
             sortstrategy: SortStrategy::Block,
-            prefetch_concurrency: None,
+            prefetch_concurrency: Some(1),
             policy_cache_ttl: Duration::from_secs(300),
             policy_cache_capacity: 1024,
             fanotify: true,
