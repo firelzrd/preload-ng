@@ -20,6 +20,8 @@ rkyv.workspace = true
 libc.workspace = true
 serde.workspace = true
 moka.workspace = true
+rustc-hash.workspace = true
+half.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true

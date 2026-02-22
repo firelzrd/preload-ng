@@ -35,9 +35,9 @@ async fn procfs_scanner_observes_current_exe() {
     let _ = engine.tick().await.unwrap();
 
     let stores = engine.stores();
-    let has_exe = stores.exes.keys().any(|key| key.path() == &exe_path);
+    let has_exe = stores.exes.keys().any(|key| key.path() == &*exe_path);
     assert!(has_exe, "expected current exe to be admitted");
 
-    let has_map = stores.maps.iter().any(|(_, map)| map.path == exe_path);
+    let has_map = stores.maps.iter().any(|(_, map)| *map.path == *exe_path);
     assert!(has_map, "expected at least one map for current exe");
 }

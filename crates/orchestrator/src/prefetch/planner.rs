@@ -5,12 +5,12 @@ use crate::prediction::Prediction;
 use crate::prefetch::PrefetchPlan;
 use crate::stores::Stores;
 use config::{Config, SortStrategy};
+use half::f16;
 use std::cmp::Ordering;
-use std::collections::HashMap;
-use std::fs;
-use std::os::linux::fs::MetadataExt;
-use std::sync::Mutex;
 use tracing::trace;
+
+/// Default block size for computing block index when metadata is unavailable.
+const DEFAULT_BLOCK_SIZE: u64 = 4096;
 
 pub trait PrefetchPlanner: Send + Sync {
     /// Create a prefetch plan from prediction scores and memory stats.
@@ -22,7 +22,6 @@ pub struct GreedyPrefetchPlanner {
     sort: SortStrategy,
     memtotal: i32,
     memavailable: i32,
-    sort_cache: Mutex<HashMap<MapId, Option<MapSortMeta>>>,
 }
 
 impl GreedyPrefetchPlanner {
@@ -32,7 +31,6 @@ impl GreedyPrefetchPlanner {
             sort: config.system.sortstrategy,
             memtotal: policy.memtotal,
             memavailable: policy.memavailable,
-            sort_cache: Mutex::new(HashMap::new()),
         }
     }
 
@@ -45,50 +43,23 @@ impl GreedyPrefetchPlanner {
     fn kb(bytes: u64) -> u64 {
         bytes.div_ceil(1024)
     }
-
-    fn sort_meta(&self, map_id: MapId, map: &crate::domain::MapSegment) -> Option<MapSortMeta> {
-        if let Ok(cache) = self.sort_cache.lock()
-            && let Some(meta) = cache.get(&map_id)
-        {
-            return *meta;
-        }
-
-        let meta = fs::metadata(&map.path).ok().map(|metadata| {
-            let block_size = metadata.st_blksize();
-            let block_size = if block_size > 0 { block_size } else { 4096 };
-            let block = map.offset / block_size;
-            MapSortMeta {
-                device: metadata.st_dev(),
-                inode: metadata.st_ino(),
-                block,
-            }
-        });
-
-        if let Ok(mut cache) = self.sort_cache.lock() {
-            cache.insert(map_id, meta);
-        }
-
-        meta
-    }
 }
 
 impl PrefetchPlanner for GreedyPrefetchPlanner {
     fn plan(&self, prediction: &Prediction, stores: &Stores, memstat: &MemStat) -> PrefetchPlan {
-        let mut items: Vec<(MapId, f32)> = prediction
+        let mut items: Vec<(MapId, f16)> = prediction
             .map_scores
             .iter()
+            .filter(|(_, score)| **score > f16::ZERO)
             .map(|(id, score)| (*id, *score))
             .collect();
-        items.sort_by(|a, b| b.1.total_cmp(&a.1));
+        items.sort_unstable_by(|a, b| b.1.total_cmp(&a.1));
 
         let mut budget_kb = self.available_kb(memstat);
         let mut selected = Vec::new();
         let mut total_bytes: u64 = 0;
 
         for (map_id, score) in items {
-            if score <= 0.0 {
-                break; // sorted descending; all remaining scores are <= 0
-            }
             let Some(map) = stores.maps.get(map_id) else {
                 continue;
             };
@@ -109,7 +80,7 @@ impl PrefetchPlanner for GreedyPrefetchPlanner {
         match self.sort {
             SortStrategy::None => {}
             SortStrategy::Path => {
-                let mut keyed: Vec<SelectedWithKey<std::path::PathBuf>> = selected
+                let mut keyed: Vec<SelectedWithKey<std::sync::Arc<std::path::Path>>> = selected
                     .into_iter()
                     .map(|item| {
                         let key = stores.maps.get(item.id).map(|m| m.path.clone());
@@ -119,27 +90,39 @@ impl PrefetchPlanner for GreedyPrefetchPlanner {
                 sort_by_score_and_key(&mut keyed);
                 selected = keyed.into_iter().map(|entry| entry.item).collect();
             }
-            SortStrategy::Block | SortStrategy::Inode => {
-                let mut keyed: Vec<SelectedWithKey<SortKey>> = selected
+            SortStrategy::Block => {
+                let mut keyed: Vec<SelectedWithKey<BlockKey>> = selected
                     .into_iter()
                     .map(|item| {
                         let key = stores.maps.get(item.id).and_then(|map| {
-                            self.sort_meta(item.id, map).map(|meta| match self.sort {
-                                SortStrategy::Block => SortKey::Block(BlockKey {
-                                    device: meta.device,
-                                    block: meta.block,
-                                    offset: map.offset,
-                                }),
-                                SortStrategy::Inode => SortKey::Inode(InodeKey {
-                                    device: meta.device,
-                                    inode: meta.inode,
-                                    offset: map.offset,
-                                }),
-                                _ => SortKey::Block(BlockKey {
-                                    device: meta.device,
-                                    block: meta.block,
-                                    offset: map.offset,
-                                }),
+                            if map.device == 0 && map.inode == 0 {
+                                return None;
+                            }
+                            let block = map.offset / DEFAULT_BLOCK_SIZE;
+                            Some(BlockKey {
+                                device: map.device,
+                                block,
+                                offset: map.offset,
+                            })
+                        });
+                        SelectedWithKey { item, key }
+                    })
+                    .collect();
+                sort_by_score_and_key(&mut keyed);
+                selected = keyed.into_iter().map(|entry| entry.item).collect();
+            }
+            SortStrategy::Inode => {
+                let mut keyed: Vec<SelectedWithKey<InodeKey>> = selected
+                    .into_iter()
+                    .map(|item| {
+                        let key = stores.maps.get(item.id).and_then(|map| {
+                            if map.device == 0 && map.inode == 0 {
+                                return None;
+                            }
+                            Some(InodeKey {
+                                device: map.device,
+                                inode: map.inode,
+                                offset: map.offset,
                             })
                         });
                         SelectedWithKey { item, key }
@@ -163,17 +146,10 @@ impl PrefetchPlanner for GreedyPrefetchPlanner {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-struct MapSortMeta {
-    device: u64,
-    inode: u64,
-    block: u64,
-}
-
 #[derive(Debug, Clone)]
 struct SelectedMap {
     id: MapId,
-    score: f32,
+    score: f16,
     index: usize,
 }
 
@@ -197,14 +173,8 @@ struct InodeKey {
     offset: u64,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-enum SortKey {
-    Block(BlockKey),
-    Inode(InodeKey),
-}
-
 fn sort_by_score_and_key<K: Ord>(items: &mut [SelectedWithKey<K>]) {
-    items.sort_by(|a, b| {
+    items.sort_unstable_by(|a, b| {
         let score_cmp = b.item.score.total_cmp(&a.item.score);
         if score_cmp != Ordering::Equal {
             return score_cmp;
@@ -254,7 +224,7 @@ mod tests {
                     *size,
                     0,
                 ));
-                prediction.map_scores.insert(map_id, *score);
+                prediction.map_scores.insert(map_id, f16::from_f32(*score));
             }
 
             let mem = MemStat {

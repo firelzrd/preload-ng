@@ -9,5 +9,5 @@ mod memstat;
 pub use exe::Exe;
 pub use ids::{ExeId, ExeKey, MapId, MapKey};
 pub use map_segment::MapSegment;
-pub use markov::{MarkovEdge, MarkovState};
+pub use markov::MarkovState;
 pub use memstat::MemStat;

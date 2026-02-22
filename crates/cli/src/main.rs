@@ -12,7 +12,10 @@ use orchestrator::{
     observation::{DefaultAdmissionPolicy, DefaultModelUpdater, FanotifyWatcher, ProcfsScanner},
     persistence::{NoopRepository, SqliteRepository},
     prediction::MarkovPredictor,
-    prefetch::{GreedyPrefetchPlanner, NoopPrefetcher, PosixFadvisePrefetcher, Prefetcher},
+    prefetch::{
+        GreedyPrefetchPlanner, MadvisePrefetcher, NoopPrefetcher, Prefetcher, ReadPrefetcher,
+        ReadaheadPrefetcher,
+    },
 };
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
@@ -131,18 +134,46 @@ fn build_reload_bundle(config: Config, no_prefetch: bool) -> ReloadBundle {
 
 /// Select the prefetcher implementation based on configuration and CLI flags.
 fn build_prefetcher(config: &Config, no_prefetch: bool) -> Box<dyn Prefetcher> {
-    if no_prefetch {
-        Box::new(NoopPrefetcher)
-    } else {
-        let concurrency = match config.system.prefetch_concurrency {
-            Some(0) => return Box::new(NoopPrefetcher),
-            Some(value) => value,
-            None => std::thread::available_parallelism()
-                .map(|n| n.get())
-                .unwrap_or(1),
-        };
+    use config::PrefetchBackend;
 
-        Box::new(PosixFadvisePrefetcher::new(concurrency))
+    if no_prefetch {
+        return Box::new(NoopPrefetcher);
+    }
+
+    let concurrency = match config.system.prefetch_concurrency {
+        Some(0) => return Box::new(NoopPrefetcher),
+        Some(value) => value,
+        None => std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(1),
+    };
+
+    match config.system.prefetch_backend {
+        PrefetchBackend::Readahead => {
+            info!(concurrency, backend = "readahead", "prefetcher selected");
+            Box::new(ReadaheadPrefetcher::new(concurrency))
+        }
+        PrefetchBackend::Madvise => {
+            info!(concurrency, backend = "madvise", "prefetcher selected");
+            Box::new(MadvisePrefetcher::new(concurrency))
+        }
+        PrefetchBackend::Read => {
+            info!(concurrency, backend = "read", "prefetcher selected");
+            Box::new(ReadPrefetcher::new(concurrency))
+        }
+        PrefetchBackend::Auto => {
+            // Probe available backends: readahead → madvise → read
+            if ReadaheadPrefetcher::probe() {
+                info!(concurrency, backend = "readahead", "prefetcher auto-selected");
+                Box::new(ReadaheadPrefetcher::new(concurrency))
+            } else if MadvisePrefetcher::probe() {
+                info!(concurrency, backend = "madvise", "prefetcher auto-selected");
+                Box::new(MadvisePrefetcher::new(concurrency))
+            } else {
+                info!(concurrency, backend = "read", "prefetcher auto-selected (fallback)");
+                Box::new(ReadPrefetcher::new(concurrency))
+            }
+        }
     }
 }
 

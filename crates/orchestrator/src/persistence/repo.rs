@@ -64,7 +64,10 @@ impl SqliteRepository {
         let options = SqliteConnectOptions::new()
             .filename(&path)
             .create_if_missing(true)
-            .journal_mode(SqliteJournalMode::Wal);
+            .journal_mode(SqliteJournalMode::Wal)
+            .pragma("synchronous", "NORMAL")
+            .pragma("mmap_size", "268435456")
+            .pragma("cache_size", "-8000");
 
         let pool = SqlitePoolOptions::new()
             .max_connections(1)

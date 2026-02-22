@@ -4,7 +4,8 @@ use crate::observation::CandidateExe;
 use config::Config;
 use moka::policy::EvictionPolicy;
 use moka::sync::Cache;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
@@ -49,7 +50,7 @@ pub struct DefaultAdmissionPolicy {
     mapprefix: Vec<String>,
     cache_ttl: Duration,
     cache_capacity: usize,
-    cache: Option<Cache<PathBuf, RejectReason>>,
+    cache: Option<Cache<Arc<Path>, RejectReason>>,
     cache_hits: AtomicU64,
     cache_misses: AtomicU64,
     cache_inserts: AtomicU64,
@@ -196,14 +197,14 @@ impl AdmissionPolicy for DefaultAdmissionPolicy {
 }
 
 impl DefaultAdmissionPolicy {
-    fn cache_reject(&self, path: &Path, reason: RejectReason) {
+    fn cache_reject(&self, path: &Arc<Path>, reason: RejectReason) {
         if let Some(cache) = &self.cache {
-            cache.insert(path.to_path_buf(), reason);
+            cache.insert(Arc::clone(path), reason);
             self.cache_inserts.fetch_add(1, Ordering::Relaxed);
         }
     }
 
-    fn cache_clear(&self, path: &Path) {
+    fn cache_clear(&self, path: &Arc<Path>) {
         if let Some(cache) = &self.cache {
             cache.invalidate(path);
             self.cache_invalidations.fetch_add(1, Ordering::Relaxed);
@@ -228,9 +229,12 @@ mod tests {
     use super::*;
     use crate::domain::MapSegment;
     use proptest::prelude::*;
-    use std::path::PathBuf;
     use std::thread::sleep;
     use std::time::Duration;
+
+    fn arc(s: &str) -> Arc<Path> {
+        Arc::from(Path::new(s))
+    }
 
     #[test]
     fn prefix_matching_respects_negation() {
@@ -245,7 +249,7 @@ mod tests {
     fn decision_rejects_small() {
         let config = Config::default();
         let policy = DefaultAdmissionPolicy::new(&config);
-        let mut exe = CandidateExe::new(PathBuf::from("/usr/bin/app"), 1);
+        let mut exe = CandidateExe::new(arc("/usr/bin/app"), 1);
         exe.maps.push(MapSegment::new("/usr/lib/lib.so", 0, 1, 0));
         exe.total_size = 1;
         let decision = policy.decide(&exe);
@@ -261,8 +265,8 @@ mod tests {
     fn decision_rejects_map_prefix_when_all_maps_denied() {
         let config = Config::default();
         let policy = DefaultAdmissionPolicy::new(&config);
-        let mut exe = CandidateExe::new(PathBuf::from("/usr/bin/app"), 1);
-        exe.rejected_maps.push(PathBuf::from("/opt/secret.so"));
+        let mut exe = CandidateExe::new(arc("/usr/bin/app"), 1);
+        exe.rejected_maps.push(arc("/opt/secret.so"));
         let decision = policy.decide(&exe);
         assert!(matches!(
             decision,
@@ -282,7 +286,7 @@ mod tests {
         config.system.policy_cache_capacity = 8;
 
         let policy = DefaultAdmissionPolicy::new(&config);
-        let mut exe = CandidateExe::new(PathBuf::from("/tmp/app"), 1);
+        let mut exe = CandidateExe::new(arc("/tmp/app"), 1);
         exe.maps.push(MapSegment::new("/tmp/lib.so", 0, 1, 0));
         exe.total_size = 1;
 
@@ -323,11 +327,11 @@ mod tests {
         config.system.policy_cache_capacity = 1;
 
         let policy = DefaultAdmissionPolicy::new(&config);
-        let mut exe_a = CandidateExe::new(PathBuf::from("/tmp/a"), 1);
+        let mut exe_a = CandidateExe::new(arc("/tmp/a"), 1);
         exe_a.maps.push(MapSegment::new("/tmp/a.so", 0, 1, 0));
         exe_a.total_size = 1;
 
-        let mut exe_b = CandidateExe::new(PathBuf::from("/tmp/b"), 1);
+        let mut exe_b = CandidateExe::new(arc("/tmp/b"), 1);
         exe_b.maps.push(MapSegment::new("/tmp/b.so", 0, 1, 0));
         exe_b.total_size = 1;
 
@@ -373,7 +377,7 @@ mod tests {
         config.system.policy_cache_capacity = 8;
 
         let policy = DefaultAdmissionPolicy::new(&config);
-        let mut exe = CandidateExe::new(PathBuf::from("/tmp/app"), 1);
+        let mut exe = CandidateExe::new(arc("/tmp/app"), 1);
         exe.maps.push(MapSegment::new("/tmp/lib.so", 0, 1, 0));
         exe.total_size = 1;
 

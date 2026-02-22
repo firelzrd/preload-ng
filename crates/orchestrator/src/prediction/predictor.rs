@@ -1,10 +1,12 @@
 #![forbid(unsafe_code)]
 
 use crate::domain::{ExeId, MarkovState};
+use crate::math::fast_exp_neg;
 use crate::prediction::Prediction;
 use crate::stores::Stores;
 use config::Config;
-use std::collections::HashMap;
+use half::f16;
+use rustc_hash::FxHashMap;
 
 pub trait Predictor: Send + Sync {
     /// Produce exe and map scores for the next cycle.
@@ -51,34 +53,42 @@ impl MarkovPredictor {
     }
 
     fn p_needed(
-        edge: &crate::domain::MarkovEdge,
+        edge: &crate::stores::EdgeRef<'_>,
         state: MarkovState,
         target_state: MarkovState,
         cycle: f32,
     ) -> f32 {
         let state_ix = state.index();
-        let tt = edge.time_to_leave[state_ix];
+        let tt = edge.time_to_leave[state_ix].to_f32();
         if tt <= 0.0 {
             return 0.0;
         }
-        let p_state_change = 1.0 - (-cycle / tt).exp();
+        let p_state_change = 1.0 - fast_exp_neg(-cycle / tt);
         let target_ix = target_state.index();
         let both_ix = MarkovState::Both.index();
-        let p_runs_next =
-            edge.transition_prob[state_ix][target_ix] + edge.transition_prob[state_ix][both_ix];
+        let p_runs_next = edge.transition_prob[state_ix][target_ix].to_f32()
+            + edge.transition_prob[state_ix][both_ix].to_f32();
         (p_state_change * p_runs_next).clamp(0.0, 1.0)
     }
 }
 
 impl Predictor for MarkovPredictor {
     fn predict(&self, stores: &Stores) -> Prediction {
-        let mut not_needed: HashMap<ExeId, f32> = HashMap::new();
+        // Pre-cache running state to avoid repeated store lookups per edge.
+        let running: FxHashMap<ExeId, bool> = stores
+            .exes
+            .iter()
+            .map(|(id, exe)| (id, exe.running))
+            .collect();
+
+        let mut not_needed: FxHashMap<ExeId, f32> =
+            FxHashMap::with_capacity_and_hasher(running.len(), Default::default());
 
         for (key, edge) in stores.markov.iter() {
             let a = key.a();
             let b = key.b();
-            let a_running = stores.exes.get(a).map(|e| e.running).unwrap_or(false);
-            let b_running = stores.exes.get(b).map(|e| e.running).unwrap_or(false);
+            let a_running = running.get(&a).copied().unwrap_or(false);
+            let b_running = running.get(&b).copied().unwrap_or(false);
 
             let state = MarkovState::from_running(a_running, b_running);
 
@@ -91,13 +101,13 @@ impl Predictor for MarkovPredictor {
             };
 
             if !a_running {
-                let base = Self::p_needed(edge, state, MarkovState::AOnly, self.cycle_secs);
+                let base = Self::p_needed(&edge, state, MarkovState::AOnly, self.cycle_secs);
                 let p = (base * corr).clamp(0.0, 1.0);
                 let entry = not_needed.entry(a).or_insert(1.0);
                 *entry *= 1.0 - p;
             }
             if !b_running {
-                let base = Self::p_needed(edge, state, MarkovState::BOnly, self.cycle_secs);
+                let base = Self::p_needed(&edge, state, MarkovState::BOnly, self.cycle_secs);
                 let p = (base * corr).clamp(0.0, 1.0);
                 let entry = not_needed.entry(b).or_insert(1.0);
                 *entry *= 1.0 - p;
@@ -108,7 +118,7 @@ impl Predictor for MarkovPredictor {
 
         for (exe_id, exe) in stores.exes.iter() {
             if exe.running {
-                prediction.exe_scores.insert(exe_id, 0.0);
+                prediction.exe_scores.insert(exe_id, f16::ZERO);
             } else {
                 let markov_needed = not_needed
                     .get(&exe_id)
@@ -123,19 +133,24 @@ impl Predictor for MarkovPredictor {
                 // Minimum score ensures all observed exes are prefetch candidates.
                 // Budget and sort order ensure high-confidence predictions come first.
                 let needed = markov_needed.max(base_prob).max(1e-6);
-                prediction.exe_scores.insert(exe_id, needed);
+                prediction.exe_scores.insert(exe_id, f16::from_f32(needed));
             }
         }
 
         // Map scores derived from exe scores (Pr map needed).
+        // Uses 4-lane parallel accumulators so the compiler can
+        // auto-vectorize the reduction for maps with many linked exes.
         for (map_id, _map) in stores.maps.iter() {
-            let mut not_needed_prob = 1.0;
+            let mut acc = [1.0f32; 4];
+            let mut lane = 0usize;
             for exe_id in stores.exe_maps.exes_for_map(map_id) {
-                let exe_score = prediction.exe_scores.get(&exe_id).copied().unwrap_or(0.0);
-                not_needed_prob *= 1.0 - exe_score;
+                let exe_score = prediction.exe_scores.get(&exe_id).copied().unwrap_or(f16::ZERO).to_f32();
+                acc[lane] *= 1.0 - exe_score;
+                lane = (lane + 1) & 3;
             }
-            let needed = (1.0 - not_needed_prob).clamp(0.0, 1.0);
-            prediction.map_scores.insert(map_id, needed);
+            let not_needed = acc[0] * acc[1] * acc[2] * acc[3];
+            let needed = (1.0 - not_needed).clamp(0.0, 1.0);
+            prediction.map_scores.insert(map_id, f16::from_f32(needed));
         }
 
         prediction
@@ -205,10 +220,10 @@ mod tests {
                     }
                     let state = MarkovState::Neither;
                     stores.ensure_markov_edge(a, b, model_time, state);
-                    if let Some(edge) = stores.markov.get_mut(EdgeKey::new(a, b)) {
-                        edge.time_to_leave = ttl;
-                        edge.transition_prob = tp;
-                        edge.both_running_time = both_time;
+                    if let Some(mut edge) = stores.markov.get_mut(EdgeKey::new(a, b)) {
+                        edge.set_time_to_leave_f32(ttl);
+                        edge.set_transition_prob_f32(tp);
+                        *edge.both_running_time = both_time;
                     }
                 }
             }
@@ -219,13 +234,15 @@ mod tests {
             let prediction = predictor.predict(&stores);
 
             for score in prediction.exe_scores.values() {
-                prop_assert!(!score.is_nan());
-                prop_assert!(*score >= 0.0 && *score <= 1.0);
+                let s = score.to_f32();
+                prop_assert!(!s.is_nan());
+                prop_assert!(s >= 0.0 && s <= 1.0);
             }
 
             for score in prediction.map_scores.values() {
-                prop_assert!(!score.is_nan());
-                prop_assert!(*score >= 0.0 && *score <= 1.0);
+                let s = score.to_f32();
+                prop_assert!(!s.is_nan());
+                prop_assert!(s >= 0.0 && s <= 1.0);
             }
         }
     }

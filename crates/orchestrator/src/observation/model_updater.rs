@@ -7,7 +7,9 @@ use crate::observation::{
 };
 use crate::stores::Stores;
 use config::Config;
-use std::collections::{HashMap, HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
+use std::path::Path;
+use std::sync::Arc;
 use tracing::{debug, trace};
 
 #[derive(Debug, Default, Clone)]
@@ -52,8 +54,11 @@ impl ModelUpdater for DefaultModelUpdater {
         observation: &Observation,
         policy: &dyn AdmissionPolicy,
     ) -> Result<ModelDelta, Error> {
-        let mut candidates: HashMap<std::path::PathBuf, CandidateExe> = HashMap::new();
-        let mut running_paths: HashSet<std::path::PathBuf> = HashSet::new();
+        let hint = observation.len() / 2;
+        let mut candidates: FxHashMap<Arc<Path>, CandidateExe> =
+            FxHashMap::with_capacity_and_hasher(hint, Default::default());
+        let mut running_paths: FxHashSet<Arc<Path>> =
+            FxHashSet::with_capacity_and_hasher(hint, Default::default());
         let mut now = stores.model_time;
 
         for event in observation {
@@ -84,18 +89,18 @@ impl ModelUpdater for DefaultModelUpdater {
         }
 
         let mut delta = ModelDelta::default();
-        let mut active_exe_ids = HashSet::new();
+        let mut active_exe_ids = FxHashSet::default();
 
         for (_, candidate) in candidates.into_iter() {
             match policy.decide(&candidate) {
                 AdmissionDecision::Reject { reason } => {
                     delta
                         .rejected
-                        .push((ExeKey::new(candidate.path.clone()), reason));
+                        .push((ExeKey::from_arc(candidate.path.clone()), reason));
                 }
                 AdmissionDecision::Defer => {}
                 AdmissionDecision::Accept { completeness } => {
-                    let exe_key = ExeKey::new(candidate.path.clone());
+                    let exe_key = ExeKey::from_arc(candidate.path.clone());
                     let is_new_exe = stores.exes.id_by_key(&exe_key).is_none();
                     let exe_id = stores.ensure_exe(exe_key.clone());
                     if is_new_exe {
@@ -171,7 +176,7 @@ impl ModelUpdater for DefaultModelUpdater {
             }
         }
 
-        // Accounting time updates.
+        // Accounting time updates + Markov transitions (merged single iteration).
         let period = now.saturating_sub(stores.last_accounting_time);
         if period > 0 {
             let exe_ids: Vec<_> = stores.exes.iter().map(|(id, _)| id).collect();
@@ -182,23 +187,17 @@ impl ModelUpdater for DefaultModelUpdater {
                     exe_mut.total_running_time = exe_mut.total_running_time.saturating_add(period);
                 }
             }
-            for (key, edge) in stores.markov.iter_mut() {
-                let a_running = stores.exes.get(key.a()).map(|e| e.running).unwrap_or(false);
-                let b_running = stores.exes.get(key.b()).map(|e| e.running).unwrap_or(false);
-                if a_running && b_running {
-                    edge.both_running_time = edge.both_running_time.saturating_add(period);
-                }
-            }
         }
-        stores.last_accounting_time = now;
-
-        // Update Markov transitions.
-        for (key, edge) in stores.markov.iter_mut() {
+        for (key, mut edge) in stores.markov.iter_mut() {
             let a_running = stores.exes.get(key.a()).map(|e| e.running).unwrap_or(false);
             let b_running = stores.exes.get(key.b()).map(|e| e.running).unwrap_or(false);
+            if period > 0 && a_running && b_running {
+                *edge.both_running_time = edge.both_running_time.saturating_add(period);
+            }
             let new_state = MarkovState::from_running(a_running, b_running);
             edge.update_state(new_state, now, self.decay);
         }
+        stores.last_accounting_time = now;
 
         stores.model_time = now;
 

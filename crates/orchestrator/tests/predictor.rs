@@ -25,8 +25,8 @@ fn predictor_scores_non_running_exe_from_edge() {
     stores.ensure_markov_edge(exe_a, exe_b, now, MarkovState::BOnly);
     let edge_key = EdgeKey::new(exe_a, exe_b);
     let edge = stores.markov.get_mut(edge_key).unwrap();
-    edge.time_to_leave[MarkovState::BOnly.index()] = 1.0;
-    edge.transition_prob[MarkovState::BOnly.index()][MarkovState::AOnly.index()] = 1.0;
+    edge.time_to_leave[MarkovState::BOnly.index()] = half::f16::from_f32(1.0);
+    edge.transition_prob[MarkovState::BOnly.index()][MarkovState::AOnly.index()] = half::f16::from_f32(1.0);
 
     let map_id = stores.ensure_map(MapSegment::new("/usr/lib/libfoo.so", 0, 2048, now));
     stores.attach_map(exe_a, map_id);
@@ -35,12 +35,12 @@ fn predictor_scores_non_running_exe_from_edge() {
     let prediction = predictor.predict(&stores);
 
     let expected = 1.0 - (-1.0f32).exp();
-    let a_score = prediction.exe_scores.get(&exe_a).copied().unwrap();
-    let b_score = prediction.exe_scores.get(&exe_b).copied().unwrap();
+    let a_score = prediction.exe_scores.get(&exe_a).copied().unwrap().to_f32();
+    let b_score = prediction.exe_scores.get(&exe_b).copied().unwrap().to_f32();
 
-    assert!((a_score - expected).abs() < 1e-4);
+    assert!((a_score - expected).abs() < 1e-3);
     assert_eq!(b_score, 0.0);
 
-    let map_score = prediction.map_scores.get(&map_id).copied().unwrap();
-    assert!((map_score - a_score).abs() < 1e-6);
+    let map_score = prediction.map_scores.get(&map_id).copied().unwrap().to_f32();
+    assert!((map_score - a_score).abs() < 1e-3);
 }

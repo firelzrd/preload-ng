@@ -7,7 +7,8 @@ use orchestrator::{
     observation::{DefaultAdmissionPolicy, DefaultModelUpdater, ObservationEvent},
     stores::Stores,
 };
-use std::path::PathBuf;
+use std::path::Path;
+use std::sync::Arc;
 
 #[test]
 fn admits_exe_and_maps() {
@@ -16,9 +17,8 @@ fn admits_exe_and_maps() {
     let mut updater = DefaultModelUpdater::new(&config);
     let mut stores = Stores::default();
 
-    let exe_path = PathBuf::from("/usr/bin/app");
-    let map_path = PathBuf::from("/usr/lib/libfoo.so");
-    let map = MapSegment::new(map_path, 0, config.model.minsize, 0);
+    let exe_path: Arc<Path> = Arc::from(Path::new("/usr/bin/app"));
+    let map = MapSegment::from_arc(Arc::from(Path::new("/usr/lib/libfoo.so")), 0, config.model.minsize, 0);
 
     let observation = vec![
         ObservationEvent::ObsBegin {

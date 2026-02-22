@@ -2,12 +2,12 @@
 
 use crate::domain::{Exe, ExeId, ExeKey};
 use slotmap::SlotMap;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 #[derive(Debug, Default)]
 pub struct ExeStore {
     exes: SlotMap<ExeId, Exe>,
-    by_key: HashMap<ExeKey, ExeId>,
+    by_key: FxHashMap<ExeKey, ExeId>,
 }
 
 impl ExeStore {

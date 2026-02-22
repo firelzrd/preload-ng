@@ -12,7 +12,7 @@ use orchestrator::prefetch::{
     GreedyPrefetchPlanner, NoopPrefetcher, PrefetchPlan, PrefetchReport, Prefetcher,
 };
 use orchestrator::{PreloadEngine, Services};
-use std::path::PathBuf;
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 use tempfile::tempdir;
 
@@ -33,7 +33,7 @@ impl Scanner for StaticScanner {
 
 #[derive(Debug)]
 struct PathScorePredictor {
-    scores: Vec<(PathBuf, f32)>,
+    scores: Vec<(Arc<Path>, f32)>,
 }
 
 impl Predictor for PathScorePredictor {
@@ -46,7 +46,7 @@ impl Predictor for PathScorePredictor {
                 .find(|(path, _)| path == &map.path)
                 .map(|(_, score)| *score)
             {
-                prediction.map_scores.insert(map_id, score);
+                prediction.map_scores.insert(map_id, half::f16::from_f32(score));
             }
         }
         prediction
@@ -83,9 +83,9 @@ impl Prefetcher for SpyPrefetcher {
 
 #[tokio::test]
 async fn engine_tick_flows_through_pipeline() {
-    let exe_path = PathBuf::from("/test/exe");
-    let map_a = PathBuf::from("/test/map-a");
-    let map_b = PathBuf::from("/test/map-b");
+    let exe_path: Arc<Path> = Arc::from(Path::new("/test/exe"));
+    let map_a: Arc<Path> = Arc::from(Path::new("/test/map-a"));
+    let map_b: Arc<Path> = Arc::from(Path::new("/test/map-b"));
 
     let observation = vec![
         ObservationEvent::ObsBegin {
@@ -98,11 +98,11 @@ async fn engine_tick_flows_through_pipeline() {
         },
         ObservationEvent::MapSeen {
             exe_path: exe_path.clone(),
-            map: MapSegment::new(map_a.clone(), 0, 2048, 0),
+            map: MapSegment::from_arc(map_a.clone(), 0, 2048, 0),
         },
         ObservationEvent::MapSeen {
             exe_path: exe_path.clone(),
-            map: MapSegment::new(map_b.clone(), 0, 1024, 0),
+            map: MapSegment::from_arc(map_b.clone(), 0, 1024, 0),
         },
         ObservationEvent::MemStat {
             mem: MemStat {
@@ -166,9 +166,9 @@ async fn engine_tick_flows_through_pipeline() {
 
 #[tokio::test]
 async fn engine_persists_and_loads_state() {
-    let exe_path = PathBuf::from("/test/exe");
-    let map_a = PathBuf::from("/test/map-a");
-    let map_b = PathBuf::from("/test/map-b");
+    let exe_path: Arc<Path> = Arc::from(Path::new("/test/exe"));
+    let map_a: Arc<Path> = Arc::from(Path::new("/test/map-a"));
+    let map_b: Arc<Path> = Arc::from(Path::new("/test/map-b"));
 
     let observation = vec![
         ObservationEvent::ObsBegin {
@@ -181,11 +181,11 @@ async fn engine_persists_and_loads_state() {
         },
         ObservationEvent::MapSeen {
             exe_path: exe_path.clone(),
-            map: MapSegment::new(map_a.clone(), 0, 2048, 10),
+            map: MapSegment::from_arc(map_a.clone(), 0, 2048, 10),
         },
         ObservationEvent::MapSeen {
             exe_path: exe_path.clone(),
-            map: MapSegment::new(map_b.clone(), 0, 1024, 10),
+            map: MapSegment::from_arc(map_b.clone(), 0, 1024, 10),
         },
         ObservationEvent::ObsEnd {
             time: 10,
@@ -239,17 +239,17 @@ async fn engine_persists_and_loads_state() {
     let exe_id = stores
         .exes
         .iter()
-        .find(|(_, exe)| exe.key.path() == &exe_path)
+        .find(|(_, exe)| exe.key.path() == &*exe_path)
         .map(|(id, _)| id)
         .expect("exe missing after reload");
 
-    let map_paths: std::collections::HashSet<_> = stores
+    let map_paths: std::collections::HashSet<Arc<Path>> = stores
         .exe_maps
         .maps_for_exe(exe_id)
         .filter_map(|map_id| stores.maps.get(map_id))
         .map(|map| map.path.clone())
         .collect();
 
-    let expected: std::collections::HashSet<_> = [map_a, map_b].into_iter().collect();
+    let expected: std::collections::HashSet<Arc<Path>> = [map_a, map_b].into_iter().collect();
     assert_eq!(map_paths, expected);
 }

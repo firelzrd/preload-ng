@@ -24,15 +24,15 @@ pub trait Scanner: Send + Sync {
 
 #[derive(Debug, Clone)]
 pub struct CandidateExe {
-    pub path: std::path::PathBuf,
+    pub path: std::sync::Arc<std::path::Path>,
     pub pid: u32,
     pub maps: Vec<crate::domain::MapSegment>,
     pub total_size: u64,
-    pub rejected_maps: Vec<std::path::PathBuf>,
+    pub rejected_maps: Vec<std::sync::Arc<std::path::Path>>,
 }
 
 impl CandidateExe {
-    pub fn new(path: std::path::PathBuf, pid: u32) -> Self {
+    pub fn new(path: std::sync::Arc<std::path::Path>, pid: u32) -> Self {
         Self {
             path,
             pid,

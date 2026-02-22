@@ -24,13 +24,15 @@ serde_with = "3.16.1"
 toml_edit = { version = "0.25.0", features = ["serde"] }
 slotmap = "1.1.1"
 procfs = "0.18.0"
-nix = { version = "0.31.1", features = ["fanotify", "fs", "process", "signal"] }
+nix = { version = "0.31.1", features = ["fanotify", "fs", "mman", "poll", "process", "signal"] }
 sqlx = { version = "0.8.6", features = ["macros", "runtime-tokio", "sqlite"] }
 rkyv = { version = "0.8.14", features = ["bytecheck"] }
 moka = { version = "0.12.8", features = ["sync"] }
 clap = { version = "4.5.56", features = ["derive"] }
 tempfile = "3.24.0"
 libc = "0.2.180"
+rustc-hash = "2.1.1"
+half = "2.6.0"
 
 [profile.release]
 lto = true

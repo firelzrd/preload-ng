@@ -3,9 +3,10 @@
 use crate::domain::MapSegment;
 use crate::observation::ObservationEvent;
 use nix::sys::fanotify::{EventFFlags, Fanotify, InitFlags, MarkFlags, MaskFlags};
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::os::fd::AsRawFd;
-use std::path::PathBuf;
+use std::os::linux::fs::MetadataExt;
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
@@ -21,10 +22,17 @@ const SKIP_PREFIXES: &[&str] = &[
     "/var/lock/",
 ];
 
+#[derive(Debug, Clone, Copy)]
+struct FileMeta {
+    size: u64,
+    device: u64,
+    inode: u64,
+}
+
 #[derive(Default)]
 struct EventBuffer {
-    maps: HashMap<(PathBuf, PathBuf), u64>,
-    exes: HashMap<PathBuf, u32>,
+    maps: FxHashMap<(Arc<Path>, Arc<Path>), FileMeta>,
+    exes: FxHashMap<Arc<Path>, u32>,
 }
 
 pub struct FanotifyWatcher {
@@ -95,7 +103,14 @@ impl FanotifyWatcher {
         buffer: Arc<Mutex<EventBuffer>>,
         stop: Arc<AtomicBool>,
     ) {
+        use nix::poll::{PollFd, PollFlags, PollTimeout, poll};
+        use std::fmt::Write as FmtWrite;
+
         let self_pid = std::process::id() as i32;
+        use std::os::fd::AsFd;
+        let mut poll_fds = [PollFd::new(fan.as_fd(), PollFlags::POLLIN)];
+        // Reusable string to avoid per-event heap allocations for proc paths.
+        let mut proc_path = String::with_capacity(48);
 
         loop {
             if stop.load(Ordering::Relaxed) {
@@ -105,7 +120,8 @@ impl FanotifyWatcher {
             let events = match fan.read_events() {
                 Ok(events) => events,
                 Err(nix::errno::Errno::EAGAIN) => {
-                    std::thread::sleep(std::time::Duration::from_millis(100));
+                    // Wait for readability instead of busy-sleeping.
+                    let _ = poll(&mut poll_fds, PollTimeout::from(100u16));
                     continue;
                 }
                 Err(nix::errno::Errno::EINTR) => continue,
@@ -127,8 +143,10 @@ impl FanotifyWatcher {
 
                 let raw_fd = fd.as_raw_fd();
 
-                // Resolve file path from fd.
-                let file_path = match std::fs::read_link(format!("/proc/self/fd/{raw_fd}")) {
+                // Resolve file path from fd (reuse buffer to avoid alloc).
+                proc_path.clear();
+                let _ = write!(proc_path, "/proc/self/fd/{raw_fd}");
+                let file_path = match std::fs::read_link(&proc_path) {
                     Ok(p) => p,
                     Err(_) => continue,
                 };
@@ -150,20 +168,29 @@ impl FanotifyWatcher {
                 if !meta.is_file() || meta.len() == 0 {
                     continue;
                 }
-                let file_size = meta.len();
+                let file_meta = FileMeta {
+                    size: meta.len(),
+                    device: meta.st_dev(),
+                    inode: meta.st_ino(),
+                };
 
-                // Resolve exe path of the opening process.
-                let exe_path = match std::fs::read_link(format!("/proc/{pid}/exe")) {
+                // Resolve exe path of the opening process (reuse buffer).
+                proc_path.clear();
+                let _ = write!(proc_path, "/proc/{pid}/exe");
+                let exe_path = match std::fs::read_link(&proc_path) {
                     Ok(p) => p,
                     Err(_) => continue,
                 };
+
+                let file_path: Arc<Path> = Arc::from(file_path.as_path());
+                let exe_path: Arc<Path> = Arc::from(exe_path.as_path());
 
                 let mut buf = match buffer.lock() {
                     Ok(b) => b,
                     Err(poisoned) => poisoned.into_inner(),
                 };
                 buf.exes.entry(exe_path.clone()).or_insert(pid as u32);
-                buf.maps.entry((exe_path, file_path)).or_insert(file_size);
+                buf.maps.entry((exe_path, file_path)).or_insert(file_meta);
             }
         }
 
@@ -185,10 +212,13 @@ impl FanotifyWatcher {
             events.push(ObservationEvent::ExeSeen { path, pid });
         }
 
-        for ((exe_path, file_path), file_size) in buf.maps {
+        for ((exe_path, file_path), fm) in buf.maps {
+            let mut segment = MapSegment::from_arc(file_path, 0, fm.size, time);
+            segment.device = fm.device;
+            segment.inode = fm.inode;
             events.push(ObservationEvent::MapSeen {
                 exe_path,
-                map: MapSegment::new(file_path, 0, file_size, time),
+                map: segment,
             });
         }
 

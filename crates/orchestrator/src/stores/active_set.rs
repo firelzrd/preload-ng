@@ -1,11 +1,11 @@
 #![forbid(unsafe_code)]
 
 use crate::domain::ExeId;
-use std::collections::{HashMap, HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 #[derive(Debug, Default)]
 pub struct ActiveSet {
-    last_seen: HashMap<ExeId, u64>,
+    last_seen: FxHashMap<ExeId, u64>,
 }
 
 impl ActiveSet {
@@ -15,8 +15,8 @@ impl ActiveSet {
         }
     }
 
-    pub fn prune(&mut self, now: u64, window: u64) -> HashSet<ExeId> {
-        let mut removed = HashSet::new();
+    pub fn prune(&mut self, now: u64, window: u64) -> FxHashSet<ExeId> {
+        let mut removed = FxHashSet::default();
         self.last_seen.retain(|exe_id, last| {
             if now.saturating_sub(*last) > window {
                 removed.insert(*exe_id);
@@ -28,7 +28,7 @@ impl ActiveSet {
         removed
     }
 
-    pub fn exes(&self) -> HashSet<ExeId> {
+    pub fn exes(&self) -> FxHashSet<ExeId> {
         self.last_seen.keys().copied().collect()
     }
 }
@@ -38,7 +38,7 @@ mod tests {
     use super::*;
     use proptest::prelude::*;
     use slotmap::SlotMap;
-    use std::collections::HashSet;
+    use rustc_hash::FxHashSet;
 
     proptest! {
         #[test]
@@ -58,18 +58,18 @@ mod tests {
             let before = set.last_seen.clone();
             let removed = set.prune(now, window);
 
-            let expected_removed: HashSet<_> = before
+            let expected_removed: FxHashSet<_> = before
                 .iter()
                 .filter(|(_, last)| now.saturating_sub(**last) > window)
                 .map(|(id, _)| *id)
                 .collect();
-            let expected_remaining: HashSet<_> = before
+            let expected_remaining: FxHashSet<_> = before
                 .keys()
                 .copied()
                 .filter(|id| !expected_removed.contains(id))
                 .collect();
 
-            let remaining: HashSet<_> = set.last_seen.keys().copied().collect();
+            let remaining: FxHashSet<_> = set.last_seen.keys().copied().collect();
 
             prop_assert_eq!(removed, expected_removed);
             prop_assert_eq!(remaining, expected_remaining);

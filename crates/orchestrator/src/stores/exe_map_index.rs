@@ -1,12 +1,12 @@
 #![forbid(unsafe_code)]
 
 use crate::domain::{ExeId, MapId};
-use std::collections::{HashMap, HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 #[derive(Debug, Default)]
 pub struct ExeMapIndex {
-    exe_to_maps: HashMap<ExeId, HashSet<MapId>>,
-    map_to_exes: HashMap<MapId, HashSet<ExeId>>,
+    exe_to_maps: FxHashMap<ExeId, FxHashSet<MapId>>,
+    map_to_exes: FxHashMap<MapId, FxHashSet<ExeId>>,
 }
 
 impl ExeMapIndex {

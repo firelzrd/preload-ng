@@ -12,10 +12,10 @@ pub use edge_key::EdgeKey;
 pub use exe_map_index::ExeMapIndex;
 pub use exe_store::ExeStore;
 pub use map_store::MapStore;
-pub use markov_graph::MarkovGraph;
+pub use markov_graph::{EdgeRef, EdgeRefMut, MarkovGraph};
 
 use crate::domain::{ExeId, ExeKey, MapId, MapSegment, MarkovState};
-use std::collections::HashSet;
+use rustc_hash::FxHashSet;
 
 #[derive(Debug, Default)]
 pub struct Stores {
@@ -56,7 +56,7 @@ impl Stores {
         }
     }
 
-    pub fn active_exes(&self) -> HashSet<ExeId> {
+    pub fn active_exes(&self) -> FxHashSet<ExeId> {
         self.active.exes()
     }
 }

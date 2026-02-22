@@ -1,9 +1,10 @@
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 
 pub mod clock;
 pub mod domain;
 pub mod engine;
 pub mod error;
+pub(crate) mod math;
 pub mod observation;
 pub mod persistence;
 pub mod prediction;
@@ -19,10 +20,11 @@ pub use observation::{
 pub use persistence::{NoopRepository, SqliteRepository, StateRepository, StoresSnapshot};
 pub use prediction::{MarkovPredictor, Prediction, PredictionSummary, Predictor};
 pub use prefetch::{
-    GreedyPrefetchPlanner, NoopPrefetcher, PosixFadvisePrefetcher, PrefetchPlan, PrefetchPlanner,
-    PrefetchReport, Prefetcher,
+    GreedyPrefetchPlanner, MadvisePrefetcher, NoopPrefetcher, PosixFadvisePrefetcher,
+    PrefetchPlan, PrefetchPlanner, PrefetchReport, Prefetcher, ReadPrefetcher,
+    ReadaheadPrefetcher,
 };
 
 pub use clock::{Clock, SystemClock};
-pub use domain::{Exe, ExeId, ExeKey, MapId, MapKey, MapSegment, MarkovEdge, MarkovState, MemStat};
+pub use domain::{Exe, ExeId, ExeKey, MapId, MapKey, MapSegment, MarkovState, MemStat};
 pub use stores::Stores;

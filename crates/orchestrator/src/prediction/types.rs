@@ -1,12 +1,13 @@
 #![forbid(unsafe_code)]
 
 use crate::domain::{ExeId, MapId};
-use std::collections::HashMap;
+use half::f16;
+use rustc_hash::FxHashMap;
 
 #[derive(Debug, Default, Clone)]
 pub struct Prediction {
-    pub exe_scores: HashMap<ExeId, f32>,
-    pub map_scores: HashMap<MapId, f32>,
+    pub exe_scores: FxHashMap<ExeId, f16>,
+    pub map_scores: FxHashMap<MapId, f16>,
 }
 
 #[derive(Debug, Default, Clone)]

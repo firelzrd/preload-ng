@@ -33,6 +33,12 @@ mapprefix = ["!/proc/", "!/sys/", "!/dev/", "!/tmp/", "!/run/", "/"]
 # Enable fanotify file-open monitoring for broader prefetch coverage.
 # Requires CAP_SYS_ADMIN. Falls back gracefully if unavailable.
 fanotify = true
+# Prefetch backend: auto | readahead | madvise | read.
+# auto: select the fastest available backend automatically.
+# readahead: readahead(2) syscall — no userspace buffer copy.
+# madvise: mmap + madvise(MADV_WILLNEED) — effective for large files.
+# read: posix_fadvise + read loop — traditional portable method.
+# prefetch_backend = "auto"
 # Prefetch sort strategy: none | path | block | inode.
 sortstrategy = "block"
 # Prefetch worker concurrency. Omit for auto (CPU cores). 0 disables prefetch.

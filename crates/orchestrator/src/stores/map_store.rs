@@ -2,12 +2,12 @@
 
 use crate::domain::{MapId, MapKey, MapSegment};
 use slotmap::SlotMap;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 #[derive(Debug, Default)]
 pub struct MapStore {
     maps: SlotMap<MapId, MapSegment>,
-    by_key: HashMap<MapKey, MapId>,
+    by_key: FxHashMap<MapKey, MapId>,
 }
 
 impl MapStore {
@@ -34,8 +34,8 @@ impl MapStore {
     }
 
     pub fn remove(&mut self, id: MapId) -> bool {
-        if self.maps.remove(id).is_some() {
-            self.by_key.retain(|_, v| *v != id);
+        if let Some(segment) = self.maps.remove(id) {
+            self.by_key.remove(&segment.key());
             true
         } else {
             false

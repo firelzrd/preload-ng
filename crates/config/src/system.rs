@@ -5,6 +5,16 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::time::Duration;
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum PrefetchBackend {
+    #[default]
+    Auto,
+    Readahead,
+    Madvise,
+    Read,
+}
+
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
@@ -38,6 +48,9 @@ pub struct System {
 
     /// Enable fanotify file-open monitoring for broader prefetch coverage.
     pub fanotify: bool,
+
+    /// Prefetch backend selection.
+    pub prefetch_backend: PrefetchBackend,
 }
 
 impl Default for System {
@@ -64,6 +77,7 @@ impl Default for System {
             policy_cache_ttl: Duration::from_secs(300),
             policy_cache_capacity: 1024,
             fanotify: true,
+            prefetch_backend: PrefetchBackend::Auto,
         }
     }
 }

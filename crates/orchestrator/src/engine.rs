@@ -324,7 +324,7 @@ impl PreloadEngine {
         let mut exes = Vec::new();
         for (_, exe) in stores.exes.iter() {
             exes.push(ExeRecord {
-                path: exe.key.path().clone(),
+                path: exe.key.path().to_path_buf(),
                 total_running_time: exe.total_running_time,
                 last_seen_time: exe.last_seen_time,
             });
@@ -333,7 +333,7 @@ impl PreloadEngine {
         let mut maps = Vec::new();
         for (_, map) in stores.maps.iter() {
             maps.push(MapRecord {
-                path: map.path.clone(),
+                path: map.path.to_path_buf(),
                 offset: map.offset,
                 length: map.length,
                 update_time: map.update_time,
@@ -345,7 +345,7 @@ impl PreloadEngine {
             for map_id in stores.exe_maps.maps_for_exe(exe_id) {
                 if let Some(map) = stores.maps.get(map_id) {
                     exe_maps.push(ExeMapRecord {
-                        exe_path: exe.key.path().clone(),
+                        exe_path: exe.key.path().to_path_buf(),
                         map_key: map.key(),
                         prob: 1.0,
                     });
@@ -362,10 +362,10 @@ impl PreloadEngine {
                 continue;
             };
             markov_edges.push(MarkovRecord {
-                exe_a: exe_a.key.path().clone(),
-                exe_b: exe_b.key.path().clone(),
-                time_to_leave: edge.time_to_leave,
-                transition_prob: edge.transition_prob,
+                exe_a: exe_a.key.path().to_path_buf(),
+                exe_b: exe_b.key.path().to_path_buf(),
+                time_to_leave: edge.time_to_leave_f32(),
+                transition_prob: edge.transition_prob_f32(),
                 both_running_time: edge.both_running_time,
             });
         }
@@ -423,11 +423,11 @@ impl PreloadEngine {
             let exe_id = stores
                 .exes
                 .id_by_key(&exe_key)
-                .ok_or_else(|| Error::ExeMissing(exe_key.path().clone()))?;
+                .ok_or_else(|| Error::ExeMissing(exe_key.path().to_path_buf()))?;
             let map_id = stores
                 .maps
                 .id_by_key(&map_key)
-                .ok_or_else(|| Error::MapMissing(map_key.path.clone()))?;
+                .ok_or_else(|| Error::MapMissing(map_key.path.to_path_buf()))?;
             stores.attach_map(exe_id, map_id);
         }
 
@@ -437,19 +437,19 @@ impl PreloadEngine {
             let a = stores
                 .exes
                 .id_by_key(&exe_a_key)
-                .ok_or_else(|| Error::ExeMissing(exe_a_key.path().clone()))?;
+                .ok_or_else(|| Error::ExeMissing(exe_a_key.path().to_path_buf()))?;
             let b = stores
                 .exes
                 .id_by_key(&exe_b_key)
-                .ok_or_else(|| Error::ExeMissing(exe_b_key.path().clone()))?;
+                .ok_or_else(|| Error::ExeMissing(exe_b_key.path().to_path_buf()))?;
             let state = MarkovState::Neither;
             let key = crate::stores::EdgeKey::new(a, b);
             if stores.ensure_markov_edge(a, b, stores.model_time, state)
-                && let Some(edge) = stores.markov.get_mut(key)
+                && let Some(mut edge) = stores.markov.get_mut(key)
             {
-                edge.time_to_leave = record.time_to_leave;
-                edge.transition_prob = record.transition_prob;
-                edge.both_running_time = record.both_running_time;
+                edge.set_time_to_leave_f32(record.time_to_leave);
+                edge.set_transition_prob_f32(record.transition_prob);
+                *edge.both_running_time = record.both_running_time;
             }
         }
 
@@ -543,7 +543,7 @@ mod tests {
             policy: &dyn AdmissionPolicy,
         ) -> Result<ModelDelta, Error> {
             self.record();
-            let candidate = CandidateExe::new(std::path::PathBuf::from("/bin/test"), 0);
+            let candidate = CandidateExe::new(Arc::from(Path::new("/bin/test")), 0);
             let _ = policy.decide(&candidate);
             Ok(ModelDelta::default())
         }
@@ -642,10 +642,10 @@ mod tests {
                     }
                     let state = MarkovState::Neither;
                     stores.ensure_markov_edge(a, b, model_time, state);
-                    if let Some(edge) = stores.markov.get_mut(EdgeKey::new(a, b)) {
-                        edge.time_to_leave = ttl;
-                        edge.transition_prob = tp;
-                        edge.both_running_time = both_time;
+                    if let Some(mut edge) = stores.markov.get_mut(EdgeKey::new(a, b)) {
+                        edge.set_time_to_leave_f32(ttl);
+                        edge.set_transition_prob_f32(tp);
+                        *edge.both_running_time = both_time;
                     }
                 }
             }
@@ -689,7 +689,7 @@ mod tests {
             let restored_exes: HashSet<_> = restored
                 .exes
                 .iter()
-                .map(|(_, exe)| exe.key.path().clone())
+                .map(|(_, exe)| exe.key.path().to_path_buf())
                 .collect();
             let restored_maps: HashSet<_> = restored
                 .maps
@@ -708,7 +708,7 @@ mod tests {
                         .exe_maps
                         .maps_for_exe(exe_id)
                         .filter_map(|map_id| restored.maps.get(map_id))
-                        .map(move |map| (exe.key.path().clone(), map.key()))
+                        .map(move |map| (exe.key.path().to_path_buf(), map.key()))
                 })
                 .collect();
 
@@ -719,13 +719,13 @@ mod tests {
                     .markov
                     .iter()
                     .filter_map(|(key, edge)| {
-                        let a = restored.exes.get(key.a())?.key.path().clone();
-                        let b = restored.exes.get(key.b())?.key.path().clone();
+                        let a = restored.exes.get(key.a())?.key.path().to_path_buf();
+                        let b = restored.exes.get(key.b())?.key.path().to_path_buf();
                         Some((
                             (a, b),
                     EdgeData {
-                        time_to_leave: edge.time_to_leave,
-                        transition_prob: edge.transition_prob,
+                        time_to_leave: edge.time_to_leave_f32(),
+                        transition_prob: edge.transition_prob_f32(),
                         both_running_time: edge.both_running_time,
                     },
                 ))

@@ -12,7 +12,7 @@ pub use memory_policy::MemoryPolicy;
 pub use model::Model;
 pub use persistence::Persistence;
 pub use sort_strategy::SortStrategy;
-pub use system::System;
+pub use system::{PrefetchBackend, System};
 
 use serde::{Deserialize, Serialize};
 use std::path::Path;
