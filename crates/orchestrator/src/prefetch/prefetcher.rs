@@ -9,7 +9,7 @@ use std::fs::OpenOptions;
 use std::io::{Read, Seek, SeekFrom};
 use std::num::NonZeroUsize;
 use std::os::unix::fs::OpenOptionsExt;
-use tracing::warn;
+use tracing::debug;
 
 #[async_trait]
 pub trait Prefetcher: Send + Sync {
@@ -427,7 +427,7 @@ where
         match result {
             Ok(()) => report.num_maps += 1,
             Err(err) => {
-                warn!(?map_key, %err, "prefetch failed");
+                debug!(?map_key, %err, "prefetch failed");
                 report.failures.push(map_key);
             }
         }

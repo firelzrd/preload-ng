@@ -9,7 +9,7 @@ use procfs::{Current, Meminfo, page_size, vmstat};
 use rustc_hash::FxHashMap;
 use std::path::Path;
 use std::sync::Arc;
-use tracing::{info, trace, warn};
+use tracing::{debug, trace};
 
 /// How often (in scan cycles) to re-scan maps of already-known processes.
 const DEFAULT_MAP_RESCAN_INTERVAL: u64 = 5;
@@ -176,7 +176,7 @@ impl Scanner for ProcfsScanner {
             let process = match process {
                 Ok(p) => p,
                 Err(err) => {
-                    warn!(?err, "failed to read process entry");
+                    debug!(?err, "failed to read process entry");
                     continue;
                 }
             };
@@ -221,7 +221,7 @@ impl Scanner for ProcfsScanner {
                 let exe_path = match process.exe() {
                     Ok(path) => path,
                     Err(err) => {
-                        warn!(pid, ?err, "failed to read exe path");
+                        debug!(pid, ?err, "failed to read exe path");
                         continue;
                     }
                 };
@@ -252,7 +252,7 @@ impl Scanner for ProcfsScanner {
             let fan_events = watcher.drain(time);
             let fan_exes = fan_events.iter().filter(|e| matches!(e, ObservationEvent::ExeSeen { .. })).count();
             let fan_maps = fan_events.iter().filter(|e| matches!(e, ObservationEvent::MapSeen { .. })).count();
-            info!(fan_exes, fan_maps, "fanotify drain");
+            debug!(fan_exes, fan_maps, "fanotify drain");
             events.extend(fan_events);
         }
 

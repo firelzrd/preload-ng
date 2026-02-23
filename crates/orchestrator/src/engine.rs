@@ -15,7 +15,7 @@ use config::Config;
 use std::time::{Instant, SystemTime};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 pub struct Services {
     pub scanner: Box<dyn Scanner + Send + Sync>,
@@ -173,7 +173,7 @@ impl PreloadEngine {
                 }
             }
             if removed > 0 {
-                info!(removed, "purged stale maps for missing files");
+                debug!(removed, "purged stale maps for missing files");
             }
         }
 
