@@ -123,14 +123,17 @@ impl EdgeRefMut<'_> {
         // Process transition_prob rows without diagonal-skip branch to
         // enable autovectorization.  Diagonal values are never read by
         // the prediction path, so computing them is harmless.
-        let one_minus_mix = 1.0 - mix_tp;
+        // Only the observed row (old_ix) is updated; other rows use
+        // mix=1.0 so they remain unchanged.
         for i in 0..4 {
-            let has_target = (i == old_ix) as u8 as f32;
+            let is_active_row = (i == old_ix) as u8 as f32;
+            let mix = is_active_row * mix_tp + (1.0 - is_active_row);
+            let one_minus_mix = 1.0 - mix;
             let mut row_f32 = [0.0f32; 4];
             self.transition_prob[i].convert_to_f32_slice(&mut row_f32);
             for j in 0..4 {
-                let target = has_target * (j == new_ix) as u8 as f32;
-                row_f32[j] = mix_tp * row_f32[j] + one_minus_mix * target;
+                let target = is_active_row * (j == new_ix) as u8 as f32;
+                row_f32[j] = mix * row_f32[j] + one_minus_mix * target;
             }
             self.transition_prob[i].convert_from_f32_slice(&row_f32);
         }
